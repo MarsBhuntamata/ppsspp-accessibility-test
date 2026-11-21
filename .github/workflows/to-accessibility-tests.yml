@@ -20,6 +20,8 @@ jobs:
         with:
           python-version: "3.11"
       - name: Check Python syntax
-        run: python -m compileall -q accessibility/research
+        run: python -m compileall -q accessibility
       - name: Run regression tests
         run: python -m unittest discover -s accessibility/research -p "test_*.py" -v
+      - name: Run speaking bridge unit tests
+        run: python -m unittest discover -s accessibility/bridge -p "test_*.py" -v
