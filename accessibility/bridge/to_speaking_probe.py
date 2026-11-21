@@ -4,7 +4,7 @@
 This is an OCR-based fallback, NOT native semantic Tactics Ogre menu support.
 Captures PPSSPP's emulated PSP framebuffer through its read-only WebSocket
 debugger and recognizes it using Windows' built-in, offline OCR engine.
-F8: read current screen; F9: repeat; F10: quit.
+Ctrl+Alt+Shift+O: read screen; Ctrl+Alt+Shift+P: repeat; Ctrl+Alt+Shift+Q: quit.
 No game memory, ISO, save, or emulator setting is written.
 """
 from __future__ import annotations
@@ -23,7 +23,12 @@ from pathlib import Path
 
 USER32 = ctypes.windll.user32 if hasattr(ctypes, "windll") else None
 WM_HOTKEY = 0x0312
-HOTKEY_IDS = {1: 0x77, 2: 0x78, 3: 0x79}  # F8, F9, F10
+MOD_ALT = 0x0001
+MOD_CONTROL = 0x0002
+MOD_SHIFT = 0x0004
+MOD_NOREPEAT = 0x4000
+HOTKEY_MODIFIERS = MOD_ALT | MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT
+HOTKEY_IDS = {1: ord('O'), 2: ord('P'), 3: ord('Q')}
 
 
 def extract_screenshot(response: dict) -> bytes:
@@ -50,7 +55,11 @@ def new_lines(previous: str, current: str) -> str:
 
 
 class Voice:
-    """Windows SAPI speech in a single worker thread (independent of NVDA)."""
+    """Reliable local Windows SAPI speech, with a queue and COM initialization.
+
+    Synchronous Speak avoids the silent async COM worker issue in v0.1.
+    Speech does not require NVDA, so it works even with NVDA running.
+    """
     def __init__(self):
         self.messages = queue.Queue()
         self.worker = threading.Thread(target=self._run, daemon=True)
@@ -58,31 +67,35 @@ class Voice:
 
     def say(self, text: str):
         if text:
-            self.messages.put(text)
+            print("SPEAK:", text, flush=True)
+            self.messages.put(str(text))
 
     def _run(self):
         try:
             import pythoncom
             import win32com.client
             pythoncom.CoInitialize()
-            voice = win32com.client.Dispatch("SAPI.SpVoice")
-            # Async with purge, so reading the newest selection interrupts older text.
-            while True:
-                item = self.messages.get()
-                if item is None:
-                    return
-                voice.Speak(item, 3)
+            try:
+                voice = win32com.client.Dispatch("SAPI.SpVoice")
+                while True:
+                    item = self.messages.get()
+                    if item is None:
+                        break
+                    # Synchronous speech in a COM-initialized thread.
+                    # The older async call could return without ever speaking.
+                    voice.Speak(item, 0)
+            finally:
+                pythoncom.CoUninitialize()
         except Exception as exc:
-            print("Speech failed:", exc, flush=True)
+            print("SAPI ERROR:", repr(exc), flush=True)
             while True:
                 item = self.messages.get()
                 if item is None:
                     return
-                print(item, flush=True)
+                print("UNSPOKEN:", item, flush=True)
 
     def stop(self):
         self.messages.put(None)
-
 
 class Ppsspp:
     def __init__(self, port: int):
@@ -141,8 +154,8 @@ class Bridge:
             client = Ppsspp(self.port)
             status = client.request("game.status")
             game = status.get("game") or {}
-            identity = str(game.get("title") or game.get("id") or "unknown game")
-            self.voice.say(f"Connected to PPSSPP. {identity}. Press F8 to read the screen, F9 to repeat, F10 to quit.")
+            identity = str(status.get("title") or status.get("id") or game.get("title") or game.get("id") or "unknown game")
+            self.voice.say(f"Connected to PPSSPP. {identity}. Control Alt Shift O reads the screen. Control Alt Shift P repeats. Control Alt Shift Q quits.")
             with tempfile.TemporaryDirectory(prefix="to_accessibility_") as temp:
                 picture = Path(temp) / "capture.png"
                 while not self.done.is_set():
@@ -178,11 +191,13 @@ class Bridge:
         if USER32 is None:
             raise RuntimeError("This prototype requires Windows")
         registered = []
+        self.voice.say("Tactics Ogre speech test. If you hear this, Windows speech is working.")
         try:
             for hotkey_id, vk in HOTKEY_IDS.items():
-                if not USER32.RegisterHotKey(None, hotkey_id, 0, vk):
-                    raise RuntimeError(f"Could not register F{hotkey_id + 7}; another app may use it")
+                if not USER32.RegisterHotKey(None, hotkey_id, HOTKEY_MODIFIERS, vk):
+                    raise RuntimeError(f"Cannot register Control Alt Shift {chr(vk)}; another app may use it")
                 registered.append(hotkey_id)
+            self.voice.say("Starting PPSSPP connection.")
             worker = threading.Thread(target=self.run_worker, daemon=True)
             worker.start()
             msg = wintypes.MSG()
@@ -192,6 +207,7 @@ class Bridge:
                     if action == "stop":
                         break
                     if action:
+                        self.voice.say("Reading screen." if action == "read" else "Repeating.")
                         self.actions.put(action)
         finally:
             self.done.set()
