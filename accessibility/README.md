@@ -76,3 +76,32 @@ One Vision archives, the mapper located **128 message records in 5 resources**:
 
 These are archive identifiers, **not** menu selection IDs. The extraction is
 read-only and the JSONL generated from the user's game should remain local.
+
+
+## Speaking prototype: standalone PPSSPP
+
+`accessibility/bridge/to_speaking_probe.py` is a **temporary OCR-based**
+screen reader for the *game framebuffer*, not the emulator UI. It uses PPSSPP's
+read-only `gpu.buffer.screenshot` WebSocket event, the **local/offline**
+Windows OCR engine, and Windows SAPI speech independent of NVDA. It avoids
+RetroArch completely and does not rely on inaccessible PowerShell prompts.
+
+On Windows, enable PPSSPP's remote debugger at port 56244, launch the game,
+then run `accessibility/bridge/start_windows.bat`. The launcher installs
+Python dependencies and opens the bridge.
+
+- **F8**: recognize and speak the currently displayed game screen.
+- **F9**: repeat the last recognized screen text.
+- **F10**: quit the bridge.
+
+Dependencies: Python 3.11+ on Windows, `websocket-client`, `pywin32`,
+and `winrt-Windows.Media.Ocr[all]`, plus a Windows OCR language pack.
+Nothing is uploaded to a cloud service. The bridge uses its own local SAPI
+speech voice initially, rather than the NVDA controller API.
+
+**Not yet verified on the player's machine:** Windows OCR accuracy, readable
+text in One Vision, responsive speech, or game-wide playability. Its current
+OCR read is manual and may have the same fundamental recognition limitations
+as other OCR tools. The existing game-data index remains research, not active
+menu text. This is a practical interim access experiment; permanent
+accessibility requires semantic menu, dialogue, and battlefield state decoding.
