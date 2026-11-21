@@ -62,7 +62,9 @@ class Voice:
 
     def _run(self):
         try:
+            import pythoncom
             import win32com.client
+            pythoncom.CoInitialize()
             voice = win32com.client.Dispatch("SAPI.SpVoice")
             # Async with purge, so reading the newest selection interrupts older text.
             while True:
