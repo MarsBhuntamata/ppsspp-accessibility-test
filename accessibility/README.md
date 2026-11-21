@@ -90,9 +90,9 @@ On Windows, enable PPSSPP's remote debugger at port 56244, launch the game,
 then run `accessibility/bridge/start_windows.bat`. The launcher installs
 Python dependencies and opens the bridge.
 
-- **F8**: recognize and speak the currently displayed game screen.
-- **F9**: repeat the last recognized screen text.
-- **F10**: quit the bridge.
+- **Ctrl+Alt+Shift+O**: recognize and speak the currently displayed game screen.
+- **Ctrl+Alt+Shift+P**: repeat the last recognized screen text.
+- **Ctrl+Alt+Shift+Q**: quit the bridge.
 
 Dependencies: Python 3.11+ on Windows, `websocket-client`, `pywin32`,
 and `winrt-Windows.Media.Ocr[all]`, plus a Windows OCR language pack.
@@ -105,3 +105,7 @@ OCR read is manual and may have the same fundamental recognition limitations
 as other OCR tools. The existing game-data index remains research, not active
 menu text. This is a practical interim access experiment; permanent
 accessibility requires semantic menu, dialogue, and battlefield state decoding.
+
+## v0.2 hotkey and speech fixes
+
+The original F8 hotkey conflicted with PPSSPP's pause control. It has been removed in favor of Ctrl+Alt+Shift+O/P/Q. The Windows SAPI background worker now uses synchronous speech after COM initialization, avoiding an asynchronous voice call that could silently produce no audio. On launch it announces a speech self-test before attempting to connect; this makes voice problems distinguishable from debugger/OCR problems. The Windows launcher now installs the Graphics.Imaging and Storage WinRT namespace packages as well as Media.Ocr. **This remains unverified with the player's live game.**
