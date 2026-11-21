@@ -57,3 +57,22 @@ The accessibility-only CI workflow checks Python syntax and these tests on the
 `to-accessibility` branch, without building PPSSPP. A live NVDA reader is
 **not yet implemented**: the next research problem is correlating an identified
 resource/message ID with an actual active UI selection in emulator memory.
+
+
+## Mapping individual resources to EMES messages
+
+Generate a FILETABLE manifest first, then run:
+
+```powershell
+py accessibility/research/to_resource_emes.py to_filetable_manifest.json "path/to/USRDIR" --output to_resource_messages.jsonl
+```
+
+This combines the extracted file offsets with the provisional EMES decoder to
+label messages with their parent archive and resource ID. On the two supplied
+One Vision archives, the mapper located **128 message records in 5 resources**:
+
+- `0000.BIN` resource ID 0
+- `0384.BIN` resource IDs 10, 12, 16 and 18 (resource 18 has two tables)
+
+These are archive identifiers, **not** menu selection IDs. The extraction is
+read-only and the JSONL generated from the user's game should remain local.
