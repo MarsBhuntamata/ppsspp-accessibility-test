@@ -1,0 +1,25 @@
+name: Tactics Ogre accessibility research tests
+
+on:
+  push:
+    branches: [to-accessibility]
+    paths:
+      - "accessibility/**"
+      - ".github/workflows/to-accessibility-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Check Python syntax
+        run: python -m compileall -q accessibility/research
+      - name: Run regression tests
+        run: python -m unittest discover -s accessibility/research -p "test_*.py" -v
