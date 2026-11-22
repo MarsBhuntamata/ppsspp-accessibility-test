@@ -31,11 +31,14 @@
 
 #include <memory>
 #include <mutex>
+#include <vector>
+#include <cstring>
 
 #include "Common/System/System.h"
 #include "Core/Config.h"
 #include "Core/Core.h"
 #include "Core/CoreParameter.h"
+#include "Core/MemMap.h"
 #include "Core/Debugger/WebSocket/GameSubscriber.h"
 #include "Core/Debugger/WebSocket/WebSocketUtils.h"
 #include "Core/ELF/ParamSFO.h"
@@ -237,10 +240,91 @@ static uint32_t GetOwnProcessID() {
 #endif
 }
 
+// Read-only Tactics Ogre memory sampler (accessibility.tacticsOgre.sample).
+//
+// This is a diagnostic *candidate* reporter, not a decoded menu selection.
+// Requests can be issued during normal gameplay, without GPU/CPU stepping.
+// Optional parameters:
+//   address: PSP memory address (default 0x08800000).
+//   size: number of bytes to compare, 4..65536, multiple of 4 (default 32768).
+// Returns firstSample, changedWords, truncated, and at most 64 word changes.
+// No persistent game data, controller input, or memory writes are performed.
+static void WebSocketTacticsOgreSample(DebuggerRequest &req) {
+	uint32_t address = 0x08800000;
+	uint32_t size = 0x8000;
+	if (!req.ParamU32("address", &address, false, DebuggerParamType::OPTIONAL))
+		return;
+	if (!req.ParamU32("size", &size, false, DebuggerParamType::OPTIONAL))
+		return;
+	if ((address & 3) != 0 || (size & 3) != 0 || size < 4 || size > 65536)
+		return req.Fail("Address and size must be word aligned; size must be 4..65536");
+	// Check the memory range on the emulation thread before reading. No stepping required.
+	std::vector<uint8_t> bytes;
+	std::string gameId;
+	bool valid = false;
+	Core_RunOnCPUThread([&] {
+		if (PSP_GetBootState() != BootState::Complete || !Memory::IsActive())
+			return;
+		gameId = g_paramSFO.GetDiscID();
+		if (gameId != "ULUS10565" && gameId != "ULES10500" && gameId != "ULJM05753")
+			return;
+		if (!Memory::IsValidRange(address, size))
+			return;
+		bytes.resize(size);
+		memcpy(bytes.data(), Memory::GetPointerUnchecked(address), size);
+		valid = true;
+	});
+	if (!valid)
+		return req.Fail("Tactics Ogre is not running, or memory range is invalid");
+
+	// The previous sample is private to this command, not a saved game setting.
+	// A changed region or game identity starts a new baseline.
+	static std::mutex sampleMutex;
+	static std::vector<uint8_t> previous;
+	static std::string previousGame;
+	static uint32_t previousAddress = 0;
+	std::lock_guard<std::mutex> lock(sampleMutex);
+	bool first = previousGame != gameId || previousAddress != address || previous.size() != bytes.size();
+	uint32_t totalChanges = 0;
+	std::vector<uint32_t> addresses;
+	if (!first) {
+		for (uint32_t i = 0; i < size; i += 4) {
+			if (memcmp(previous.data() + i, bytes.data() + i, 4) != 0) {
+				++totalChanges;
+				if (addresses.size() < 64)
+					addresses.push_back(i);
+			}
+		}
+	}
+	JsonWriter &json = req.Respond();
+	json.writeString("gameId", gameId);
+	json.writeUint("address", address);
+	json.writeUint("size", size);
+	json.writeBool("firstSample", first);
+	json.writeUint("changedWords", totalChanges);
+	json.writeBool("truncated", totalChanges > addresses.size());
+	json.pushArray("changes");
+	for (auto off : addresses) {
+		uint32_t oldValue, newValue;
+		memcpy(&oldValue, previous.data() + off, 4);
+		memcpy(&newValue, bytes.data() + off, 4);
+		json.pushDict();
+		json.writeUint("address", address + off);
+		json.writeUint("before", oldValue);
+		json.writeUint("after", newValue);
+		json.pop();
+	}
+	json.pop();
+	previous.swap(bytes);
+	previousAddress = address;
+	previousGame = gameId;
+}
+
 DebuggerSubscriber *WebSocketGameInit(DebuggerEventHandlerMap &map) {
 	auto p = new WebSocketGameState();
 	map["game.reset"] = &WebSocketGameReset;
 	map["game.status"] = &WebSocketGameStatus;
+	map["accessibility.tacticsOgre.sample"] = &WebSocketTacticsOgreSample;
 	map["game.state.load"] = [p](DebuggerRequest &req) { p->StateOperation(req, StateOp::LOAD); };
 	map["game.state.save"] = [p](DebuggerRequest &req) { p->StateOperation(req, StateOp::SAVE); };
 	map["game.state.rewind"] = [p](DebuggerRequest &req) { p->StateOperation(req, StateOp::REWIND); };
