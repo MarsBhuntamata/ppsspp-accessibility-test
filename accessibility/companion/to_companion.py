@@ -26,6 +26,22 @@ MAX_CHANGES_PER_BLOCK = 8
 TRACE_NAME = "tactics-ogre-companion-trace.txt"
 
 
+def signal(kind: str):
+    """Short Windows earcon; console remains readable with NVDA review."""
+    if os.name != "nt":
+        return
+    try:
+        import winsound
+        notes = {"ready": [(660, 130), (880, 150)],
+                 "complete": [(880, 140), (1100, 190)],
+                 "error": [(330, 240), (220, 310)]}.get(kind, [])
+        for hz, ms in notes:
+            winsound.Beep(hz, ms)
+    except Exception:
+        pass
+
+
+
 def output_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
@@ -126,6 +142,7 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
         log.flush()
         print("Could not connect to your existing PPSSPP debugger on port", port, flush=True)
         print("Open PPSSPP and enable its existing remote debugger first.", flush=True)
+        signal("error")
         return 2
     try:
         status = conn.request("game.status")
@@ -135,12 +152,14 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
         if game_id not in GAME_IDS:
             print("Tactics Ogre must already be running. Detected:", game_id or "no game", flush=True)
             log.write("ERROR Tactics Ogre not loaded at startup\n")
+            signal("error")
             return 3
         log.write(f"REGION 0x{BASE:08X} {REGION_SIZE}\n")
         log.flush()
         print("Connected to Tactics Ogre. Use Up/Down in one menu.", flush=True)
         print("Capturing automatically. No extra hotkeys or terminal focus needed.", flush=True)
         print("The companion stops after", max_captures, "directional releases.", flush=True)
+        signal("ready")
         # A baseline is necessary: compare the state before and after movement.
         baseline = conn.snapshot()
         log.write("BASELINE captured\n")
@@ -184,11 +203,13 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
             log.write("FINISHED action limit reached\n")
             log.flush()
             print("Capture complete. You can close the companion.", flush=True)
+            signal("complete")
         return 0
     except Exception as exc:
         log.write(f"ERROR {type(exc).__name__}: {exc}\n")
         log.flush()
         print("Capture error:", str(exc), flush=True)
+        signal("error")
         return 1
     finally:
         conn.close()
