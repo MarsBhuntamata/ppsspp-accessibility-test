@@ -408,6 +408,7 @@ constexpr uint32_t kOgreDirections = CTRL_UP | CTRL_DOWN | CTRL_LEFT | CTRL_RIGH
 struct OgreTraceState {
 	bool started = false;
 	int actions = 0;
+	int inputTransitions = 0;
 	int countdown = -1;
 	uint32_t lastButtons = 0;
 	uint32_t size = 0;
@@ -464,7 +465,7 @@ static void OgreTraceTick() {
 			(Memory::IsValidRange(kOgreBase, kOgreFallbackSize) ? kOgreFallbackSize : 0);
 		FILE *out = OpenOgreTrace(L"w");
 		if (out) {
-			fprintf(out, "PPSSPP TACTICS OGRE NAVIGATION TRACE v1\n");
+			fprintf(out, "PPSSPP TACTICS OGRE NAVIGATION TRACE v2\n");
 			fprintf(out, "GAME %s\n", g_paramSFO.GetDiscID().c_str());
 			fprintf(out, "REGION 0x%08X %u\n", kOgreBase, ogreTrace.size);
 			fprintf(out, "Read-only candidate changes; NOT verified menu selection values.\n");
@@ -479,10 +480,22 @@ static void OgreTraceTick() {
 
 	// The controller state here is the same state that the game samples.
 	// A single action is a directional press followed by release.
-	uint32_t buttons = __CtrlPeekButtons() & kOgreDirections;
+	// Use the *sampled* PSP input that games actually receive. __CtrlPeekButtons()
+	// misses brief presses stored in ctrlUnsampledPresses and replayed inputs.
+	uint32_t buttons = ctrlOldButtons & kOgreDirections;
 	uint32_t pressed = buttons & ~ogreTrace.lastButtons;
 	uint32_t released = ogreTrace.lastButtons & ~buttons;
 	ogreTrace.lastButtons = buttons;
+	// Log input transitions separately. If ACTION records are absent, this
+	// distinguishes missing game inputs from a broken memory capture.
+	if ((pressed || released) && ogreTrace.inputTransitions < 64) {
+		++ogreTrace.inputTransitions;
+		if (FILE *out = OpenOgreTrace(L"a")) {
+			fprintf(out, "INPUT %d %s mask=%08X\n", ogreTrace.inputTransitions,
+				pressed ? "press" : "release", pressed ? pressed : released);
+			fclose(out);
+		}
+	}
 
 	if (pressed && ogreTrace.countdown < 0) {
 		ogreTrace.direction = OgreDirection(pressed);
