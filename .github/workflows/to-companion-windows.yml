@@ -1,0 +1,68 @@
+name: Tactics Ogre external companion Windows x64
+
+on:
+  push:
+    branches: [to-accessibility]
+    paths:
+      - "accessibility/companion/**"
+      - ".github/workflows/to-companion-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-companion:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout accessibility branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Python requirements and packager
+        shell: pwsh
+        run: python -m pip install --disable-pip-version-check websocket-client==1.8.0 pyinstaller==6.16.0
+      - name: Run standalone companion tests
+        shell: pwsh
+        run: python -m unittest discover -s accessibility/companion -p "test_*.py" -v
+      - name: Build single-file Windows program
+        shell: pwsh
+        run: |
+          python -m PyInstaller --clean --noconfirm --onefile --console --name TacticsOgreCompanion accessibility/companion/to_companion.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (!(Test-Path dist/TacticsOgreCompanion.exe)) { throw "Companion EXE missing" }
+      - name: Package accessible instructions
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+          Copy-Item dist/TacticsOgreCompanion.exe package/
+          Set-Content -Path package/READ_ME_FIRST.txt -Encoding UTF8 -Value @(
+            "TACTICS OGRE EXTERNAL COMPANION: Windows x64, first navigation test",
+            "",
+            "This uses your existing, working PPSSPP. DO NOT use any modified PPSSPP build.",
+            "This is diagnostic memory observation, not a finished NVDA menu reader.",
+            "",
+            "1. Leave the companion EXE in its own writable folder.",
+            "2. Start your usual PPSSPP with remote debugger enabled on localhost port 56244.",
+            "3. Load Tactics Ogre One Vision and open a game menu.",
+            "4. Double-click TacticsOgreCompanion.exe. You will hear/read the console status.",
+            "5. In the PPSSPP window, move UP/DOWN through that menu around 12 times.",
+            "6. After 14 directional releases the companion finishes; return to its console to close.",
+            "7. Upload ONLY tactics-ogre-companion-trace.txt, saved next to this EXE.",
+            "",
+            "If an ERROR or HEARTBEAT appears in the trace, upload that same trace anyway.",
+            "No OCR, Python installation, debugger commands, ISO changes, or game saves are needed.",
+            "This app connects only to 127.0.0.1:56244; it cannot upload your data.",
+            "You can keep playing your game if the companion fails.",
+            "Important: Initial capture reads 2 MiB of game memory; brief stalls are possible.",
+            "If no input broadcasts appear, the trace makes that visible for debugging."
+          )
+      - name: Upload standalone companion
+        uses: actions/upload-artifact@v4
+        with:
+          name: tactics-ogre-stock-ppsspp-companion-windows-x64
+          path: package/
+          if-no-files-found: error
+          retention-days: 14
