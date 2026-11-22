@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace net {
 class WebSocketServer;
@@ -45,4 +46,11 @@ private:
 	int lastCounter_ = -1;
 	uint32_t lastButtons_ = 0;
 	Analog lastAnalog_[2];
+
+	// Per-debugger-connection, read-only Tactics Ogre navigation observations.
+	int navigationDueVblank_ = -1;
+	uint32_t navigationAddress_ = 0x08800000;
+	std::string navigationDirection_;
+	std::string navigationGame_;
+	std::vector<uint8_t> navigationPrevious_;
 };
