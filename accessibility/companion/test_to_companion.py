@@ -32,6 +32,24 @@ class CompanionTests(unittest.TestCase):
         self.assertEqual(count, 16)
         self.assertEqual(len(changes), companion.MAX_CHANGES_PER_BLOCK)
 
+    def test_stationary_selection_changes_survive(self):
+        old_a = bytes([0, 0, 0, 0, 1, 0, 0, 0])
+        old_b = old_a
+        new_a = bytes([3, 0, 0, 0, 2, 0, 0, 0])
+        new_b = bytes([4, 0, 0, 0, 2, 0, 0, 0])
+        count, rows = companion.stable_changed_words(
+            old_a, old_b, new_a, new_b, 0x09000000)
+        self.assertEqual(count, 1)
+        self.assertEqual(rows, [(0x09000004, 1, 2)])
+
+    def test_unstable_baseline_excluded(self):
+        old_a = bytes([1, 0, 0, 0])
+        old_b = bytes([2, 0, 0, 0])
+        new_a = new_b = bytes([3, 0, 0, 0])
+        count, rows = companion.stable_changed_words(
+            old_a, old_b, new_a, new_b, 0x09000000)
+        self.assertEqual((count, rows), (0, []))
+
     def test_bad_snapshots_fail(self):
         with self.assertRaises(ValueError):
             companion.changed_words(b"\0", b"\0")
