@@ -2,8 +2,8 @@
 """Tactics Ogre accessible interim screen-reader bridge for Windows + PPSSPP.
 
 This is an OCR-based fallback, NOT native semantic Tactics Ogre menu support.
-Captures PPSSPP's emulated PSP framebuffer through its read-only WebSocket
-debugger and recognizes it using Windows' built-in, offline OCR engine.
+Captures PPSSPP's on-screen window without pausing the emulator and
+recognizes it using Windows' built-in, offline OCR engine.
 Ctrl+Alt+Shift+O: read screen; Ctrl+Alt+Shift+P: repeat; Ctrl+Alt+Shift+Q: quit.
 No game memory, ISO, save, or emulator setting is written.
 """
@@ -15,10 +15,12 @@ import base64
 import ctypes
 from ctypes import wintypes
 import json
+import os
 import queue
 import re
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 USER32 = ctypes.windll.user32 if hasattr(ctypes, "windll") else None
@@ -52,6 +54,84 @@ def new_lines(previous: str, current: str) -> str:
     old = set(previous.splitlines())
     fresh = [line for line in current.splitlines() if line not in old]
     return "\n".join(fresh) or current
+
+
+
+def find_ppsspp_window():
+    """Find a visible PPSSPP top-level window, preferring one with a game title.
+
+    This uses the normal Win32 window list, not an emulator debugger GPU hook.
+    """
+    if USER32 is None:
+        raise RuntimeError("Windows only")
+    matches = []
+    cb_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    @cb_type
+    def inspect(hwnd, lparam):
+        if not USER32.IsWindowVisible(hwnd) or USER32.IsIconic(hwnd):
+            return True
+        length = USER32.GetWindowTextLengthW(hwnd)
+        if length <= 0:
+            return True
+        buffer = ctypes.create_unicode_buffer(length + 1)
+        USER32.GetWindowTextW(hwnd, buffer, len(buffer))
+        title = buffer.value
+        if "ppsspp" in title.lower():
+            rect = wintypes.RECT()
+            if USER32.GetWindowRect(hwnd, ctypes.byref(rect)):
+                bbox = (rect.left, rect.top, rect.right, rect.bottom)
+                if bbox[2] - bbox[0] > 150 and bbox[3] - bbox[1] > 100:
+                    matches.append((hwnd, title, bbox))
+        return True
+
+    USER32.EnumWindows(inspect, 0)
+    if not matches:
+        raise RuntimeError("No visible PPSSPP window found. Keep PPSSPP open and not minimized.")
+    # Longer titles commonly contain the game name; prefer that over incidental windows.
+    return max(matches, key=lambda row: len(row[1]))
+
+
+def capture_game_window(path: Path):
+    """Capture displayed PPSSPP pixels using Pillow, no CPU/GPU stepping.
+
+    If the bridge console is in front, temporarily minimize that console.
+    The game remains running and no key is sent to PPSSPP.
+    """
+    from PIL import ImageGrab
+    _, title, bbox = find_ppsspp_window()
+    kernel32 = ctypes.windll.kernel32
+    console = kernel32.GetConsoleWindow()
+    # Do not hide the window if PPSSPP happens to be in the foreground.
+    front = USER32.GetForegroundWindow()
+    hidden = bool(console and front == console)
+    try:
+        if hidden:
+            USER32.ShowWindow(console, 6)  # SW_MINIMIZE
+            time.sleep(0.3)
+        screenshot = ImageGrab.grab(bbox=bbox, all_screens=True)
+        screenshot.save(path, "PNG")
+        return title
+    finally:
+        if hidden:
+            USER32.ShowWindow(console, 9)  # SW_RESTORE
+
+
+def console_key():
+    """Nonblocking fallback controls for when PPSSPP intercepts global hotkeys."""
+    if os.name != "nt":
+        return None
+    import msvcrt
+    if not msvcrt.kbhit():
+        return None
+    value = msvcrt.getwch()
+    if value in ("\\r", "\\n", "o", "O"):
+        return "read"
+    if value in ("r", "R", "p", "P"):
+        return "repeat"
+    if value in ("q", "Q", "\\x1b"):
+        return "stop"
+    return None
 
 
 class Voice:
@@ -155,7 +235,7 @@ class Bridge:
             status = client.request("game.status")
             game = status.get("game") or {}
             identity = str(status.get("title") or status.get("id") or game.get("title") or game.get("id") or "unknown game")
-            self.voice.say(f"Connected to PPSSPP. {identity}. Control Alt Shift O reads the screen. Control Alt Shift P repeats. Control Alt Shift Q quits.")
+            self.voice.say(f"Connected to PPSSPP. {identity}. In this bridge window press Enter to read, R to repeat, Q to quit. Global shortcuts may also work.")
             with tempfile.TemporaryDirectory(prefix="to_accessibility_") as temp:
                 picture = Path(temp) / "capture.png"
                 while not self.done.is_set():
@@ -171,8 +251,8 @@ class Bridge:
                     if action != "read":
                         continue
                     try:
-                        image = client.request("gpu.buffer.screenshot", type="uri")
-                        picture.write_bytes(extract_screenshot(image))
+                        window_title = capture_game_window(picture)
+                        print("Captured:", window_title, flush=True)
                         recognized = asyncio.run(windows_ocr(picture))
                         if recognized:
                             self.latest = recognized
@@ -180,6 +260,7 @@ class Bridge:
                         else:
                             self.voice.say("No text recognized on the current screen.")
                     except Exception as exc:
+                        print("CAPTURE/OCR ERROR:", repr(exc), flush=True)
                         self.voice.say(f"Read failed. {exc}")
         except Exception as exc:
             self.voice.say(f"Cannot connect to PPSSPP. {exc}")
@@ -191,31 +272,44 @@ class Bridge:
         if USER32 is None:
             raise RuntimeError("This prototype requires Windows")
         registered = []
-        self.voice.say("Tactics Ogre speech test. If you hear this, Windows speech is working.")
+        self.voice.say("Tactics Ogre speech test. Use Enter to read, R to repeat, Q to quit.")
         try:
             for hotkey_id, vk in HOTKEY_IDS.items():
-                if not USER32.RegisterHotKey(None, hotkey_id, HOTKEY_MODIFIERS, vk):
-                    raise RuntimeError(f"Cannot register Control Alt Shift {chr(vk)}; another app may use it")
-                registered.append(hotkey_id)
+                if USER32.RegisterHotKey(None, hotkey_id, HOTKEY_MODIFIERS, vk):
+                    registered.append(hotkey_id)
+                else:
+                    print("Global hotkey unavailable:", chr(vk), flush=True)
             self.voice.say("Starting PPSSPP connection.")
             worker = threading.Thread(target=self.run_worker, daemon=True)
             worker.start()
             msg = wintypes.MSG()
-            while USER32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
-                if msg.message == WM_HOTKEY:
-                    action = {1: "read", 2: "repeat", 3: "stop"}.get(msg.wParam)
-                    if action == "stop":
-                        break
-                    if action:
-                        self.voice.say("Reading screen." if action == "read" else "Repeating.")
-                        self.actions.put(action)
+            # Poll messages and console keys without losing the ability to read
+            # while the bridge is focused. Global hotkeys are optional.
+            while not self.done.is_set():
+                while USER32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 1):
+                    if msg.message == WM_HOTKEY:
+                        action = {1: "read", 2: "repeat", 3: "stop"}.get(msg.wParam)
+                        if action == "stop":
+                            return
+                        if action:
+                            self.actions.put(action)
+                    elif msg.message == 0x0012:  # WM_QUIT
+                        return
+                    else:
+                        USER32.TranslateMessage(ctypes.byref(msg))
+                        USER32.DispatchMessageW(ctypes.byref(msg))
+                action = console_key()
+                if action == "stop":
+                    return
+                if action:
+                    self.actions.put(action)
+                time.sleep(0.03)
         finally:
             self.done.set()
             self.actions.put("stop")
             for ident in registered:
                 USER32.UnregisterHotKey(None, ident)
             self.voice.stop()
-
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
