@@ -1,4 +1,4 @@
-name: Tactics Ogre PPSSPP Windows x64 baseline
+name: Tactics Ogre PPSSPP Windows x64 navigation trace
 
 on:
   push:
@@ -39,17 +39,26 @@ jobs:
           if (-not $exe) { throw "PPSSPPWindows64.exe was not produced" }
           Copy-Item $exe.FullName package/
           Copy-Item assets package/assets -Recurse
+          New-Item -ItemType Directory -Force -Path package/memstick | Out-Null
+          Set-Content -Path package/memstick/PORTABLE_TEST_FOLDER.txt -Value 'Separate portable PPSSPP memory stick. Do not overwrite your regular game saves.'
           Set-Content -Path package/READ_ME_FIRST.txt -Value @(
-            "Tactics Ogre PPSSPP research baseline, Windows x64.",
-            "This is a standalone emulator copy, NOT a game accessibility implementation yet.",
-            "Keep your original PPSSPP installation and saves untouched.",
-            "Extract the ZIP into a new folder. Do not overwrite your working PPSSPP.",
-            "No game ISO or game data is included."
+            "TACTICS OGRE PPSSPP NAVIGATION TRACE TEST, Windows x64.",
+            "This is a diagnostic test, not a playable NVDA interface yet.",
+            "1. Extract the complete artifact into its OWN NEW folder (not inside your regular PPSSPP).",
+            "2. Run PPSSPPWindows64.exe and load the Tactics Ogre One Vision ISO.",
+            "3. Enter any game menu and move UP/DOWN deliberately at least 8-12 times.",
+            "4. Close this test emulator normally.",
+            "5. Upload tactics-ogre-navigation-trace.txt from beside the test EXE.",
+            "The emulator records automatically. No debugger, Python, OCR or separate keys needed.",
+            "Only first 16 directional actions per launch are recorded; start near a menu if possible.",
+            "A new session replaces the previous trace file. No game ISO is packaged.",
+            "The included memstick folder keeps the test copy separate from installed PPSSPP.",
+            "Do not overwrite your regular emulator folder or move your regular saves."
           )
       - name: Upload one Windows x64 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ppsspp-tactics-ogre-windows-x64-baseline
+          name: ppsspp-tactics-ogre-navigation-trace-x64
           path: package/
           if-no-files-found: error
           retention-days: 14
