@@ -1,3 +1,13 @@
+> **STATUS (2026-11-22): OCR speaking probe is suspended, not playable.**
+> Live testing confirmed that v0.3 responds to requests but announces
+> "No text recognized on the current screen" in both PPSSPP and the bridge.
+> This proves the pipeline returns an empty recognition result, **not** whether
+> the game pixels were correctly captured. Stop distributing it as a playable
+> test. No further user testing of the OCR bridge requested. The first useful
+> milestone is an actual selection-to-text-to-NVDA integration based on the
+> currently running game version, with keyboard/menu functionality before
+> advanced features. Avoid F8 and other PPSSPP-bound keys.
+
 # Tactics Ogre PSP accessibility research
 
 This is an **experimental** read-only research area, not a working screen reader.
