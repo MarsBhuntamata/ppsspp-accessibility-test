@@ -109,3 +109,16 @@ accessibility requires semantic menu, dialogue, and battlefield state decoding.
 ## v0.2 hotkey and speech fixes
 
 The original F8 hotkey conflicted with PPSSPP's pause control. It has been removed in favor of Ctrl+Alt+Shift+O/P/Q. The Windows SAPI background worker now uses synchronous speech after COM initialization, avoiding an asynchronous voice call that could silently produce no audio. On launch it announces a speech self-test before attempting to connect; this makes voice problems distinguishable from debugger/OCR problems. The Windows launcher now installs the Graphics.Imaging and Storage WinRT namespace packages as well as Media.Ocr. **This remains unverified with the player's live game.**
+
+
+## v0.3: fixes for the user's actual test results
+
+Observed failures in v0.2:
+- `gpu.buffer.screenshot` answered `Neither CPU or GPU is stepping`. PPSSPP requires stepping for this debugger endpoint. The new bridge **does not call it** and will never automatically pause the game for screenshots.
+- The user heard no speech and got `UNSPOKEN` logs. The new speech worker logs the SAPI initialization error and tries local Windows PowerShell `System.Speech` synthesis as an independent fallback.
+- Global `Ctrl+Alt+Shift+O` worked in the bridge but not in the Tactics Ogre game. The bridge console now accepts **Enter** to read, **R** to repeat, **Q** to quit, so one can Alt+Tab to the bridge and use Enter. Global shortcuts are retained as optional.
+- The bridge minimizes its own console briefly during capture so it doesn't obstruct PPSSPP, then restores the console.
+
+The new capture uses Pillow's Windows ImageGrab to read the **visible PPSSPP window** rather than the debugger GPU screenshot. PPSSPP must be visible and not minimized; a covering window or GPU overlay can interfere with pixel capture. A real Windows test is still required. The voice logs and errors are diagnostic evidence, not proof that audio worked.
+
+The automated tests verify source syntax and test utilities, not real Windows SAPI/WinRT/OCR execution.
