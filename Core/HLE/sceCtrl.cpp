@@ -569,9 +569,10 @@ static void __CtrlDoSample()
 {
 	// This samples the ctrl data into the buffers and updates the latch.
 	__CtrlUpdateLatch();
-#if PPSSPP_PLATFORM(WINDOWS) && !PPSSPP_PLATFORM(UWP)
-	OgreTraceTick();
-#endif
+// Crash isolation: do NOT run game-memory tracing in the controller
+	// sample path. The prior build crashed on Tactics Ogre load before it
+	// could write a trace. Keep the implementation dormant until isolated.
+	// OgreTraceTick();
 
 	// Wake up a single thread that was waiting for the buffer.
 retry:
