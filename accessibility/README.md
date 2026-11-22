@@ -175,3 +175,20 @@ The code has not been verified against a real game session. Build validation
 is in the dedicated Windows x64 workflow; only source changes in the
 `to-accessibility` branch. Do not distribute a claim of playable accessibility
 before the first announced selection actually works.
+
+
+## Native navigation observations (2026-11-22)
+
+PPSSPP's existing WebSocket input broadcaster now emits an additional
+`accessibility.tacticsOgre.navigation` event on D-pad release **only while
+a debugger client is connected and Tactics Ogre is running**. It samples a
+bounded 32 KiB candidate RAM region three emulated vblanks after release and
+includes `direction`, `firstSample`, `changedWords`, and up to 64 32-bit
+before/after changes. The sampler reads on the emulation thread and does not
+inject input or alter the loaded game. Each debugger connection maintains its
+own baseline and the initial event is baseline-only.
+
+This is a **native research instrumentation point, not an accessible game
+interface**. The sampled memory region is provisional, and the candidate
+changes may not represent selection state. It still requires real gameplay
+verification before anyone claims it can identify choices or speak them.
