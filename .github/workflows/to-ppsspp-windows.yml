@@ -1,0 +1,55 @@
+name: Tactics Ogre PPSSPP Windows x64 baseline
+
+on:
+  push:
+    branches: [to-accessibility]
+    paths:
+      - ".github/workflows/to-ppsspp-windows.yml"
+      - "Core/**"
+      - "GPU/**"
+      - "Windows/**"
+      - "Common/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+      - name: Checkout PPSSPP submodules
+        shell: bash
+        run: .github/checkout-submodules.sh
+      - name: Add Visual Studio MSBuild
+        uses: microsoft/setup-msbuild@v2
+      - name: Build PPSSPP Release x64
+        shell: pwsh
+        run: |
+          msbuild Windows/PPSSPP.sln /m /p:Configuration=Release /p:Platform=x64 /p:TrackFileAccess=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Assemble standalone test package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+          $exe = Get-ChildItem -Path . -Filter "PPSSPPWindows64.exe" -File -Recurse | Where-Object { $_.FullName -notmatch "\\package\\" } | Select-Object -First 1
+          if (-not $exe) { throw "PPSSPPWindows64.exe was not produced" }
+          Copy-Item $exe.FullName package/
+          Copy-Item assets package/assets -Recurse
+          Set-Content -Path package/READ_ME_FIRST.txt -Value @(
+            "Tactics Ogre PPSSPP research baseline, Windows x64.",
+            "This is a standalone emulator copy, NOT a game accessibility implementation yet.",
+            "Keep your original PPSSPP installation and saves untouched.",
+            "Extract the ZIP into a new folder. Do not overwrite your working PPSSPP.",
+            "No game ISO or game data is included."
+          )
+      - name: Upload one Windows x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ppsspp-tactics-ogre-windows-x64-baseline
+          path: package/
+          if-no-files-found: error
+          retention-days: 14
