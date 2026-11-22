@@ -18,6 +18,7 @@ import json
 import os
 import queue
 import re
+import subprocess
 import tempfile
 import threading
 import time
@@ -168,11 +169,29 @@ class Voice:
                 pythoncom.CoUninitialize()
         except Exception as exc:
             print("SAPI ERROR:", repr(exc), flush=True)
+            print("Trying Windows PowerShell System.Speech fallback.", flush=True)
             while True:
                 item = self.messages.get()
                 if item is None:
                     return
-                print("UNSPOKEN:", item, flush=True)
+                try:
+                    # Windows PowerShell's built-in .NET speech synthesis:
+                    # works even if Python's win32com package isn't available.
+                    script = (
+                        "Add-Type -AssemblyName System.Speech; "
+                        "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                        "$s.Speak([Console]::In.ReadToEnd());"
+                    )
+                    proc = subprocess.run(
+                        ["powershell.exe", "-NoProfile", "-NonInteractive",
+                         "-Command", script],
+                        input=item, text=True, capture_output=True,
+                        timeout=45, creationflags=0x08000000,
+                    )
+                    if proc.returncode:
+                        print("SPEECH FALLBACK ERROR:", proc.stderr.strip(), flush=True)
+                except Exception as fallback_exc:
+                    print("SPEECH FALLBACK ERROR:", repr(fallback_exc), flush=True)
 
     def stop(self):
         self.messages.put(None)
