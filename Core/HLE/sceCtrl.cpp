@@ -399,8 +399,8 @@ static int __CtrlReadBuffer(u32 ctrlDataPtr, u32 nBufs, bool negative, bool peek
 namespace {
 
 constexpr uint32_t kOgreBase = 0x08800000;
-constexpr uint32_t kOgreSize = 0x01800000;  // 24 MiB of PSP game RAM.
-constexpr uint32_t kOgreFallbackSize = 0x00800000;
+constexpr uint32_t kOgreSize = 0x00040000;  // Bounded 256 KiB; no full-RAM copies.
+constexpr uint32_t kOgreFallbackSize = 0x00010000;  // 64 KiB fallback.
 constexpr int kOgreActionLimit = 16;
 constexpr int kOgreDelaySamples = 4;
 constexpr uint32_t kOgreDirections = CTRL_UP | CTRL_DOWN | CTRL_LEFT | CTRL_RIGHT;
@@ -409,6 +409,7 @@ struct OgreTraceState {
 	bool started = false;
 	int actions = 0;
 	int inputTransitions = 0;
+	int stableSamples = 0;
 	int countdown = -1;
 	uint32_t lastButtons = 0;
 	uint32_t size = 0;
@@ -456,6 +457,14 @@ static void OgreTraceTick() {
 		ogreTrace.lastButtons = 0;
 		ogreTrace.countdown = -1;
 		ogreTrace.before.clear();
+		ogreTrace.stableSamples = 0;
+		return;
+	}
+
+	// Do not access PSP RAM or open log files immediately on game boot.
+	// Allow a few seconds for Tactics Ogre initialization to settle.
+	if (ogreTrace.stableSamples < 180) {
+		++ogreTrace.stableSamples;
 		return;
 	}
 
@@ -465,10 +474,10 @@ static void OgreTraceTick() {
 			(Memory::IsValidRange(kOgreBase, kOgreFallbackSize) ? kOgreFallbackSize : 0);
 		FILE *out = OpenOgreTrace(L"w");
 		if (out) {
-			fprintf(out, "PPSSPP TACTICS OGRE NAVIGATION TRACE v2\n");
+			fprintf(out, "PPSSPP TACTICS OGRE NAVIGATION TRACE v3\n");
 			fprintf(out, "GAME %s\n", g_paramSFO.GetDiscID().c_str());
 			fprintf(out, "REGION 0x%08X %u\n", kOgreBase, ogreTrace.size);
-			fprintf(out, "Read-only candidate changes; NOT verified menu selection values.\n");
+			fprintf(out, "Read-only bounded diagnostic; NOT verified menu selection values.\n");
 			fprintf(out, "Move up/down through one menu for 8-12 presses, then exit PPSSPP.\n");
 			if (!ogreTrace.size)
 				fprintf(out, "ERROR no valid PSP memory range; no captures possible\n");
@@ -523,8 +532,7 @@ static void OgreTraceTick() {
 		fprintf(out, "ACTION %d %s\n", ogreTrace.actions, ogreTrace.direction.c_str());
 		uint32_t total = 0;
 		uint32_t logged = 0;
-		// Preserve a few candidates from every 64 KiB region rather than
-		// filling the entire trace with a frequently updated early region.
+		// Bound total work to 256 KiB rather than copying all PSP RAM.
 		for (uint32_t block = 0; block < ogreTrace.size; block += 0x10000) {
 			int blockLogged = 0;
 			for (uint32_t offset = block; offset < block + 0x10000; offset += 4) {
