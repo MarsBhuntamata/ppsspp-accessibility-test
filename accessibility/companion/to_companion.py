@@ -18,9 +18,18 @@ import sys
 import time
 
 GAME_IDS = {"ULUS10565", "ULES10500", "ULJM05753"}
-BASE = 0x08800000
-REGION_SIZE = 0x00200000  # 2 MiB, bounded and adjustable later.
-CHUNK = 0x10000  # 64 KiB safe debugger reads.
+# The previous 0x08800000..0x08A00000 area remained completely static.
+# Scan representative windows throughout 32 MiB of mapped game RAM instead.
+REGIONS = (
+    (0x08C00000, 0x00200000),
+    (0x09000000, 0x00200000),
+    (0x09800000, 0x00200000),
+    (0x09C00000, 0x00200000),
+)
+BASE = REGIONS[0][0]  # Legacy default for changed_words unit tests.
+REGION_SIZE = REGIONS[0][1]
+CHUNK = 0x20000  # 128 KiB debugger reads, 64 KiB comparison blocks.
+COMPARE_BLOCK = 0x10000
 MAX_CAPTURES = 14
 MAX_CHANGES_PER_BLOCK = 8
 TRACE_NAME = "tactics-ogre-companion-trace.txt"
@@ -54,9 +63,9 @@ def changed_words(before: bytes, after: bytes, address: int = BASE):
         raise ValueError("Mismatched or unaligned snapshots")
     changes = []
     total = 0
-    for block in range(0, len(before), CHUNK):
+    for block in range(0, len(before), COMPARE_BLOCK):
         emitted = 0
-        for off in range(block, min(block + CHUNK, len(before)), 4):
+        for off in range(block, min(block + COMPARE_BLOCK, len(before)), 4):
             a = before[off:off + 4]
             b = after[off:off + 4]
             if a == b:
@@ -115,14 +124,18 @@ class Connection:
         raise TimeoutError(f"PPSSPP did not respond to {event} within 25 seconds")
 
     def snapshot(self):
-        chunks = []
-        for off in range(0, REGION_SIZE, CHUNK):
-            response = self.request("memory.read", address=BASE + off, size=CHUNK)
-            data = base64.b64decode(response["base64"], validate=True)
-            if len(data) != CHUNK:
-                raise RuntimeError("PPSSPP returned a shortened memory block")
-            chunks.append(data)
-        return b"".join(chunks)
+        regions = []
+        for start, size in REGIONS:
+            chunks = []
+            for off in range(0, size, CHUNK):
+                length = min(CHUNK, size - off)
+                response = self.request("memory.read", address=start + off, size=length)
+                data = base64.b64decode(response["base64"], validate=True)
+                if len(data) != length:
+                    raise RuntimeError("PPSSPP returned a shortened memory block")
+                chunks.append(data)
+            regions.append(b"".join(chunks))
+        return regions
 
     def close(self):
         self.websocket.close()
@@ -132,7 +145,7 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
     import websocket
     print("Tactics Ogre companion: read-only memory navigation test.", flush=True)
     print("Use your regular PPSSPP. No game controls will be sent.", flush=True)
-    log.write("TACTICS OGRE EXTERNAL COMPANION TRACE v1\n")
+    log.write("TACTICS OGRE EXTERNAL COMPANION TRACE v2\n")
     log.write(f"START {datetime.now().isoformat(timespec='seconds')}\n")
     log.flush()
     try:
@@ -154,9 +167,11 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
             log.write("ERROR Tactics Ogre not loaded at startup\n")
             signal("error")
             return 3
-        log.write(f"REGION 0x{BASE:08X} {REGION_SIZE}\n")
+        for start, size in REGIONS:
+            log.write(f"REGION 0x{start:08X} {size}\n")
         log.flush()
-        print("Connected to Tactics Ogre. Use Up/Down in one menu.", flush=True)
+        print("Connected to Tactics Ogre. Scanning four separate game-memory regions.", flush=True)
+        print("Use alternating Up/Down in one menu, if possible.", flush=True)
         print("Capturing automatically. No extra hotkeys or terminal focus needed.", flush=True)
         print("The companion stops after", max_captures, "directional releases.", flush=True)
         signal("ready")
@@ -189,13 +204,19 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
             # Let gameplay process input; no CPU break or pause request.
             time.sleep(0.12)
             snapshot = conn.snapshot()
-            total, changes = changed_words(baseline, snapshot)
-            baseline = snapshot
             captures += 1
             log.write(f"ACTION {captures} {direction}\n")
-            for address, before, after in changes:
-                log.write(f"{address:08X} {before:08X} {after:08X}\n")
-            log.write(f"END_ACTION changed={total} logged={len(changes)}\n")
+            total = 0
+            logged = 0
+            for (start, size), previous_bytes, current_bytes in zip(REGIONS, baseline, snapshot):
+                count, changes = changed_words(previous_bytes, current_bytes, start)
+                total += count
+                logged += len(changes)
+                log.write(f"REGION_CHANGE 0x{start:08X} changed={count}\n")
+                for address, before, after in changes:
+                    log.write(f"{address:08X} {before:08X} {after:08X}\n")
+            baseline = snapshot
+            log.write(f"END_ACTION changed={total} logged={logged}\n")
             log.flush()
             print(f"Captured {captures}/{max_captures}: {direction}, {total} changed words.", flush=True)
             last_report = time.monotonic()
