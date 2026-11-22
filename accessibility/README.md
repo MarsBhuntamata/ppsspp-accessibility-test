@@ -132,3 +132,23 @@ Observed failures in v0.2:
 The new capture uses Pillow's Windows ImageGrab to read the **visible PPSSPP window** rather than the debugger GPU screenshot. PPSSPP must be visible and not minimized; a covering window or GPU overlay can interfere with pixel capture. A real Windows test is still required. The voice logs and errors are diagnostic evidence, not proof that audio worked.
 
 The automated tests verify source syntax and test utilities, not real Windows SAPI/WinRT/OCR execution.
+
+
+## Current investigation: observe menu navigation, not pixels
+
+The actual emulator source contains `InputBroadcaster::Broadcast()`, which sends
+`input.buttons` events each time an emulated button state changes; the
+`MemorySubscriber` `memory.read` event safely copies game RAM on PPSSPP's
+CPU thread. Those allow a new **read-only input-synchronized state probe**,
+`accessibility/research/to_navigation_probe.py`. It records bounded memory
+differences after actual D-pad releases, without screenshots, OCR, stepping,
+pause/resume commands, or injected button presses. This is intended to
+investigate the menu-selection state on the *running* vanilla or One Vision
+game, rather than hardcode menu choices or names.
+
+The probe is **not yet verified against the user's live PPSSPP instance**,
+and memory changes are only candidates: animations, clocks, and unrelated
+game logic also change RAM. No code currently converts those candidates to
+verified selected menu IDs. The probe is not packaged as a user-facing
+download; no additional user test is requested yet. Preserve game data,
+existing PPSSPP, and the master branch.
