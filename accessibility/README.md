@@ -152,3 +152,26 @@ game logic also change RAM. No code currently converts those candidates to
 verified selected menu IDs. The probe is not packaged as a user-facing
 download; no additional user test is requested yet. Preserve game data,
 existing PPSSPP, and the master branch.
+
+
+## First native PPSSPP C++ integration (2026-11-22)
+
+The fork's `Core/Debugger/WebSocket/GameSubscriber.cpp` now registers a new
+**read-only** debugger event:
+
+`accessibility.tacticsOgre.sample` with optional `address` (default 0x08800000)
+and `size` (default 32768 bytes; maximum 65536, both word-aligned).
+
+It reads the live game memory on PPSSPP's emulation thread without pausing or
+stepping. A second request returns the first 64 **changed 32-bit words** and
+their before/after values. A fresh game, memory region, or changed size resets
+the comparison baseline. This supports ULUS10565, ULES10500 and ULJM05753
+and rejects unrelated games. It does not write memory or change saves.
+
+**Scope and limitations:** These changes are only raw candidates, not known
+menu state. The endpoint is for a subsequent internal accessibility debugger
+session, not an NVDA menu reader and not something to ask the user to use yet.
+The code has not been verified against a real game session. Build validation
+is in the dedicated Windows x64 workflow; only source changes in the
+`to-accessibility` branch. Do not distribute a claim of playable accessibility
+before the first announced selection actually works.
