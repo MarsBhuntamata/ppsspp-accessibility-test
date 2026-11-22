@@ -30,7 +30,7 @@ BASE = REGIONS[0][0]  # Legacy default for changed_words unit tests.
 REGION_SIZE = REGIONS[0][1]
 CHUNK = 0x20000  # 128 KiB debugger reads, 64 KiB comparison blocks.
 COMPARE_BLOCK = 0x10000
-MAX_CAPTURES = 14
+MAX_CAPTURES = None  # No fixed action cutoff; user stops the recording.
 MAX_CHANGES_PER_BLOCK = 8
 TRACE_NAME = "tactics-ogre-companion-trace.txt"
 
@@ -75,6 +75,50 @@ def changed_words(before: bytes, after: bytes, address: int = BASE):
                 changes.append((address + off, int.from_bytes(a, "little"), int.from_bytes(b, "little")))
                 emitted += 1
     return total, changes
+
+
+def stable_changed_words(prev_first, prev_second, current_first, current_second,
+                         start, limit=24):
+    """Selection candidates must be stationary within both observations.
+
+    Two reads of a stationary cursor should agree. Moving graphics, counters
+    and animations are discarded even if they changed during navigation.
+    """
+    if not (len(prev_first) == len(prev_second) ==
+            len(current_first) == len(current_second)):
+        raise ValueError("Snapshot sizes differ")
+    result = []
+    stable_total = 0
+    for off in range(0, len(prev_first), 4):
+        old = prev_second[off:off + 4]
+        new = current_second[off:off + 4]
+        if (old == new or old != prev_first[off:off + 4] or
+                new != current_first[off:off + 4]):
+            continue
+        stable_total += 1
+        before = int.from_bytes(old, "little")
+        after = int.from_bytes(new, "little")
+        if len(result) < limit * 4:
+            result.append((start + off, before, after))
+    # Small index-like values first, then keep a sample of other stable words.
+    result.sort(key=lambda x: (not (x[1] < 128 and x[2] < 128),
+                               not (abs(x[1] - x[2]) <= 4), x[0]))
+    return stable_total, result[:limit]
+
+
+def stop_requested():
+    """Q in this console or Ctrl+C. Does not intercept PPSSPP game keys."""
+    if os.name != "nt":
+        return False
+    try:
+        import msvcrt
+        while msvcrt.kbhit():
+            key = msvcrt.getwch()
+            if key.lower() == "q":
+                return True
+    except (OSError, ImportError):
+        pass
+    return False
 
 
 def released_directions(message: dict):
@@ -145,7 +189,7 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
     import websocket
     print("Tactics Ogre companion: read-only memory navigation test.", flush=True)
     print("Use your regular PPSSPP. No game controls will be sent.", flush=True)
-    log.write("TACTICS OGRE EXTERNAL COMPANION TRACE v2\n")
+    log.write("TACTICS OGRE EXTERNAL COMPANION TRACE v3\n")
     log.write(f"START {datetime.now().isoformat(timespec='seconds')}\n")
     log.flush()
     try:
@@ -173,15 +217,24 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
         print("Connected to Tactics Ogre. Scanning four separate game-memory regions.", flush=True)
         print("Use alternating Up/Down in one menu, if possible.", flush=True)
         print("Capturing automatically. No extra hotkeys or terminal focus needed.", flush=True)
-        print("The companion stops after", max_captures, "directional releases.", flush=True)
+        print("No action limit. To finish, return to this window and press Q.", flush=True)
+        print("Or press Ctrl+C in this window. The current trace is saved after each action.", flush=True)
         signal("ready")
         # A baseline is necessary: compare the state before and after movement.
+        baseline_first = conn.snapshot()
+        time.sleep(0.30)
         baseline = conn.snapshot()
-        log.write("BASELINE captured\n")
+        log.write("BASELINE stationary pair captured\n")
         log.flush()
         captures = 0
         last_report = time.monotonic()
-        while captures < max_captures:
+        while max_captures is None or captures < max_captures:
+            if stop_requested():
+                log.write("FINISHED user requested stop\n")
+                log.flush()
+                signal("complete")
+                print("Finished. Saved trace.", flush=True)
+                break
             if conn.messages:
                 message = conn.messages.popleft()
             else:
@@ -202,7 +255,9 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
                 continue
             direction = directions[0]
             # Let gameplay process input; no CPU break or pause request.
-            time.sleep(0.12)
+            time.sleep(0.25)
+            snapshot_first = conn.snapshot()
+            time.sleep(0.30)
             snapshot = conn.snapshot()
             captures += 1
             log.write(f"ACTION {captures} {direction}\n")
@@ -215,12 +270,24 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
                 log.write(f"REGION_CHANGE 0x{start:08X} changed={count}\n")
                 for address, before, after in changes:
                     log.write(f"{address:08X} {before:08X} {after:08X}\n")
+            stable_total = 0
+            stable_logged = 0
+            for (start, _), old_first, old_second, new_first, new_second in zip(
+                    REGIONS, baseline_first, baseline, snapshot_first, snapshot):
+                count, candidates = stable_changed_words(
+                    old_first, old_second, new_first, new_second, start)
+                stable_total += count
+                stable_logged += len(candidates)
+                log.write(f"STABLE_REGION 0x{start:08X} changed={count}\n")
+                for address, before, after in candidates:
+                    log.write(f"CANDIDATE {address:08X} {before:08X} {after:08X}\n")
+            baseline_first = snapshot_first
             baseline = snapshot
-            log.write(f"END_ACTION changed={total} logged={logged}\n")
+            log.write(f"END_ACTION changed={total} logged={logged} stable={stable_total} candidates={stable_logged}\n")
             log.flush()
-            print(f"Captured {captures}/{max_captures}: {direction}, {total} changed words.", flush=True)
+            print(f"Captured {captures}: {direction}; {stable_total} stable changes.", flush=True)
             last_report = time.monotonic()
-        if captures >= max_captures:
+        if max_captures is not None and captures >= max_captures:
             log.write("FINISHED action limit reached\n")
             log.flush()
             print("Capture complete. You can close the companion.", flush=True)
@@ -239,15 +306,22 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=56244)
-    parser.add_argument("--captures", type=int, default=MAX_CAPTURES)
+    parser.add_argument("--captures", type=int, default=MAX_CAPTURES,
+                        help="Optional automatic stop after N moves; default is no limit")
     args = parser.parse_args()
-    if not 2 <= args.captures <= MAX_CAPTURES:
-        parser.error("--captures must be between 2 and 14")
+    if args.captures is not None and args.captures < 2:
+        parser.error("--captures must be at least 2")
     path = output_dir() / TRACE_NAME
     print("Trace file:", path, flush=True)
     try:
         with path.open("w", encoding="utf-8", buffering=1) as log:
-            result = run(args.port, log, args.captures)
+            try:
+                result = run(args.port, log, args.captures)
+            except KeyboardInterrupt:
+                log.write("FINISHED keyboard interrupt\n")
+                log.flush()
+                print("Stopped and saved trace.", flush=True)
+                result = 0
     except OSError as exc:
         print("Cannot write the trace beside this program:", exc, flush=True)
         result = 4
