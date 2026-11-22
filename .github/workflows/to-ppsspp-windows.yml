@@ -1,4 +1,4 @@
-name: Tactics Ogre PPSSPP crash isolation x64
+name: PPSSPP clean-source crash isolation x64
 
 on:
   push:
@@ -42,12 +42,12 @@ jobs:
           New-Item -ItemType Directory -Force -Path package/memstick | Out-Null
           Set-Content -Path package/memstick/PORTABLE_TEST_FOLDER.txt -Value 'Separate portable PPSSPP memory stick. Do not overwrite your regular game saves.'
           Set-Content -Path package/READ_ME_FIRST.txt -Value @(
-            "TACTICS OGRE PPSSPP CRASH ISOLATION TEST, Windows x64.",
-            "This build deliberately DISABLES the automatic navigation trace hook.",
+            "PPSSPP CLEAN-SOURCE CRASH ISOLATION TEST, Windows x64.",
+            "All four C++ files changed for Tactics Ogre research are restored to the original master versions.",
             "1. Extract the complete artifact into its OWN NEW folder (not inside your regular PPSSPP).",
             "2. Run PPSSPPWindows64.exe and load the Tactics Ogre One Vision ISO.",
             "3. Only check whether Tactics Ogre reaches its title/game menu without crashing.",
-            "4. Exit normally if successful. No trace file will be generated in this isolation build.",
+            "4. Exit normally if successful. No trace file will be generated in this build.",
             "Do not test navigation or upload files for this build.",
             "The included memstick folder keeps the test copy separate from installed PPSSPP.",
             "Do not overwrite your regular emulator folder or move your regular saves."
@@ -55,7 +55,7 @@ jobs:
       - name: Upload one Windows x64 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ppsspp-tactics-ogre-startup-isolation-x64
+          name: ppsspp-clean-source-isolation-x64
           path: package/
           if-no-files-found: error
           retention-days: 14
