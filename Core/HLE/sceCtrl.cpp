@@ -428,7 +428,7 @@ static bool IsOgreTraceGame() {
 static FILE *OpenOgreTrace(const wchar_t *mode) {
 	// Writing beside the extracted executable makes the file easy to locate
 	// and keeps it out of PPSSPP's memstick and game save directories.
-	Path tracePath = GetExeDirectory() / "tactics-ogre-navigation-trace.txt";
+	Path tracePath = File::GetExeDirectory() / "tactics-ogre-navigation-trace.txt";
 	return _wfopen(tracePath.ToWString().c_str(), mode);
 }
 
