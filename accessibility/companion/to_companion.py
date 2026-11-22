@@ -83,10 +83,11 @@ class Connection:
         self.websocket.send(json.dumps({"event": event, "ticket": ticket, **kwargs}))
         # Record input broadcasts during reads, instead of discarding them.
         deadline = time.monotonic() + 25
+        import websocket
         while time.monotonic() < deadline:
             try:
                 message = self.receive()
-            except TimeoutError:
+            except (TimeoutError, websocket.WebSocketTimeoutException):
                 continue
             if message.get("ticket") == ticket:
                 if message.get("event") == "error" or message.get("error"):
