@@ -192,3 +192,27 @@ This is a **native research instrumentation point, not an accessible game
 interface**. The sampled memory region is provisional, and the candidate
 changes may not represent selection state. It still requires real gameplay
 verification before anyone claims it can identify choices or speak them.
+
+
+## Windows x64 self-contained navigation trace test
+
+The dedicated native build packages PPSSPP, assets, a local portable `memstick`
+folder, and a `READ_ME_FIRST.txt`. The emulator automatically writes
+`tactics-ogre-navigation-trace.txt` next to the running
+`PPSSPPWindows64.exe` during Tactics Ogre directional navigation, without any
+debugger client, OCR, Python, or manually typed command.
+
+**How to test once the Windows build succeeds:** Extract into its own writable
+folder, run `PPSSPPWindows64.exe`, open the One Vision ISO, navigate Up/Down
+at least 8–12 times in a menu, close the test emulator, and send back only
+`tactics-ogre-navigation-trace.txt`. The file resets once on a new launch
+after the game boots. The test records the first **16** directional
+press-and-release actions per launch, with a 24 MiB PSP RAM sample (8 MiB
+fallback). Navigation is logged with an action direction, a change count, and
+up to eight changes per 64 KiB block.
+
+This is NOT speech, and it does NOT already know which value is the selected
+item. We analyze the trace offline with
+`accessibility/research/to_trace_report.py`, looking for reversible
+Up/Down patterns, then validate selected values and actual game text.
+No ISO, screenshots, or save files are required from the user.
