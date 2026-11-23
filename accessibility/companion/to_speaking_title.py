@@ -20,19 +20,45 @@ from to_target_watch import Connection, directions_released, WINDOW, SIZE, OFFSE
 
 GAME_IDS = {"ULUS10565", "ULES10500", "ULJM05753"}
 LOG_NAME = "tactics-ogre-speaking-log.txt"
+LABEL_FILE = "tactics-ogre-title-labels.txt"
+DEFAULT_LABELS = {0: "New Game", 1: "Load Game", 2: "Continue"}
 
 
 def folder():
     return Path(sys.executable if getattr(sys, "frozen", False) else __file__).resolve().parent
 
 
-def selection_announcement(value):
-    """Labels deliberately withheld until confirmed against actual title menu."""
-    if 0 <= value <= 2:
-        return f"Title menu, option {value + 1}"
-    if value == 3:
-        return "Title menu, option 4, unverified"
-    return None
+def read_labels(path):
+    """Load user-editable labels. Named entries remain provisional."""
+    labels = {}
+    try:
+        lines = Path(path).read_text(encoding="utf-8-sig").splitlines()
+    except FileNotFoundError:
+        return {}
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, label = line.split("=", 1)
+        if key.strip() in ("0", "1", "2", "3") and label.strip():
+            labels[int(key.strip())] = label.strip()[:100]
+    return labels
+
+
+def selection_announcement(value, labels=None):
+    """Unverified entries retain their numeric label unless configured."""
+    if not 0 <= value <= 3:
+        return None
+    names = labels or {}
+    return names.get(value, f"Title menu, option {value + 1}")
+
+
+def menu_transition(last_value, value, direction):
+    """Detect suspicious non-boundary backwards moves without guessing a label."""
+    if last_value not in (0, 1, 2) or value not in (0, 1, 2):
+        return False
+    return (direction == "up" and last_value == 1 and value == 2 or
+            direction == "down" and last_value == 1 and value == 0)
 
 
 class Speaker:
@@ -109,9 +135,9 @@ def parse_value(response):
     return data[OFFSET]
 
 
-def record_and_announce(last_value, value, speaker, *, force=False):
+def record_and_announce(last_value, value, speaker, *, labels=None, force=False):
     """Speak only known menu indices, and only upon changed selection."""
-    words = selection_announcement(value)
+    words = selection_announcement(value, labels)
     if words and (value != last_value or force):
         speaker.say(words)
         return True
@@ -131,11 +157,12 @@ def quit_pressed():
     return False
 
 
-def run(port, speaker, log):
+def run(port, speaker, log, labels=None):
     import websocket
     conn = None
-    log.write("TACTICS OGRE TITLE MENU SPEAKER v7\n")
+    log.write("TACTICS OGRE TITLE MENU SPEAKER v8\n")
     log.write(f"WATCH 0x{ADDRESS:08X}\n")
+    log.write(f"LABELS {labels or {}}\n")
     try:
         conn = Connection(port)
         status = conn.request("game.status")
@@ -149,7 +176,7 @@ def run(port, speaker, log):
         log.flush()
         print(f"Connected to Tactics Ogre. Speech: {speaker.mode}.", flush=True)
         print("Move Up/Down on the title menu. Press Q here to quit.", flush=True)
-        speaker.say("Tactics Ogre title menu speech test connected")
+        speaker.say("Tactics Ogre title speech connected. Names are provisional.")
         # Initial title display can contain 4; do not call it a menu entry.
         last_value = initial
         recent_activity = time.monotonic()
@@ -178,7 +205,12 @@ def run(port, speaker, log):
             started = time.monotonic()
             value = parse_value(conn.request("memory.read", address=WINDOW, size=SIZE))
             elapsed = time.monotonic() - started
-            spoken = record_and_announce(last_value, value, speaker)
+            suspicious = menu_transition(last_value, value, directions[0])
+            # Log suspicious transitions; do not assert that the resulting
+            # menu label matches the actual screen in these cases.
+            spoken = record_and_announce(last_value, value, speaker, labels=labels)
+            if suspicious:
+                log.write("NOTICE direction and selection index disagree\n")
             log.write(f"MOVE {directions[0]} {last_value}->{value} spoken={int(spoken)} read_ms={elapsed*1000:.1f}\n")
             log.flush()
             last_value = value
@@ -204,12 +236,18 @@ def main():
     parser.add_argument("--port", type=int, default=56244)
     args = parser.parse_args()
     speaker = Speaker()
-    print("Tactics Ogre speaking companion v7", flush=True)
+    print("Tactics Ogre speaking companion v8", flush=True)
     print("Speech method:", speaker.mode, flush=True)
+    label_path = folder() / LABEL_FILE
+    labels = read_labels(label_path)
+    if not label_path.exists():
+        label_path.write_text("# PROVISIONAL names inferred from the PSP game manual.\n# Change these if the title-menu order differs.\n0=New Game\n1=Load Game\n2=Continue\n", encoding="utf-8")
+        labels = read_labels(label_path)
+    print("Title menu labels (not yet verified):", labels, flush=True)
     path = folder() / LOG_NAME
     try:
         with path.open("w", encoding="utf-8", buffering=1) as log:
-            result = run(args.port, speaker, log)
+            result = run(args.port, speaker, log, labels)
     except OSError as exc:
         print("Cannot write log:", exc, flush=True)
         result = 2
