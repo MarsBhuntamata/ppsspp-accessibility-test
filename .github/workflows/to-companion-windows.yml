@@ -30,7 +30,7 @@ jobs:
       - name: Build single-file Windows program
         shell: pwsh
         run: |
-          python -m PyInstaller --clean --noconfirm --onefile --console --name TacticsOgreCompanion accessibility/companion/to_speaking_title.py
+          python -m PyInstaller --clean --noconfirm --onefile --console --name TacticsOgreCompanion accessibility/companion/to_menu_explorer.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (!(Test-Path dist/TacticsOgreCompanion.exe)) { throw "Companion EXE missing" }
       - name: Package accessible instructions
@@ -39,29 +39,29 @@ jobs:
           New-Item -ItemType Directory -Force -Path package | Out-Null
           Copy-Item dist/TacticsOgreCompanion.exe package/
           Set-Content -Path package/READ_ME_FIRST.txt -Encoding UTF8 -Value @(
-            "TACTICS OGRE SPEAKING TITLE MENU v8.1",
+            "TACTICS OGRE MENU EXPLORER v9",
             "",
-            "This uses your existing, working PPSSPP. DO NOT use any modified PPSSPP build.",
-            "This version SPEAKS provisional names for the first three title selections.",
+            "Use your EXISTING STOCK PPSSPP, with localhost remote debugger port 56244.",
+            "This is the NEXT MENU research build, not the previous speaking title menu reader.",
+            "The previously working v8 title reader remains available in older workflow runs.",
             "",
-            "1. Leave the companion EXE in its own writable folder.",
-            "2. Start your usual PPSSPP with remote debugger enabled on localhost port 56244.",
-            "3. Load Tactics Ogre One Vision and open the TITLE menu.",
-            "4. Double-click TacticsOgreCompanion.exe. You will hear/read the console status.",
-            "5. On title menu, press DOWN and UP. Listen for New Game, Load Game and Continue.",
-            "These names are provisional, not yet verified on your screen.",
-            "6. When finished, return to the companion console and press Q to stop recording.",
-            "7. If selection or speech fails, upload tactics-ogre-speaking-log.txt beside this EXE.",
+            "1. Extract TacticsOgreCompanion.exe into a writable folder.",
+            "2. Launch One Vision in stock PPSSPP and get to the title menu.",
+            "3. Launch this EXE, then navigate to Load Game or your chosen next menu.",
+            "4. Browse naturally with Up/Down/Left/Right, Cross to confirm, Circle to back out.",
+            "5. Explore several options, sometimes revisiting one with Down then Up.",
+            "6. The companion says Menu transition noted after confirm/cancel. This does NOT prove that a screen changed.",
+            "7. Return to companion window and press Q to stop.",
+            "8. Upload tactics-ogre-menu-explorer.txt from beside the EXE.",
             "",
-            "If there is an ERROR or HEARTBEAT in the log, upload the log.",
-            "The speech log updates after each action; Ctrl+C also ends recording.",
-            "No OCR, Python installation, debugger commands, ISO changes, or game saves are needed.",
-            "This app connects only to 127.0.0.1:56244; it cannot upload your data.",
-            "You can keep playing your game if the companion fails.",
-            "One small 4 KiB snapshot is taken after each directional release.",
-            "You can edit tactics-ogre-title-labels.txt beside the EXE to correct label order.",
-            "No 8 MiB scans. Each memory read is only 4 KiB.",
-            "Windows SAPI speaks by default. Optional official NVDA Controller Client DLL enables NVDA speech."
+            "Only memory reads. No OCR. No modified emulator. Does not change games or saves.",
+            "Selected item names in other menus are not yet decoded or spoken.",
+            "This companion records candidates for later accessibility development.",
+            "Do not confuse a possible transition with a verified game menu.",
+            "Each event reads 8 separate 64 KiB PSP memory windows, not the entire RAM.",
+            "If the menu's game state is elsewhere, the trace may have no viable cursor.",
+            "The companion never sends game input; it observes your normal controls.",
+            "You can keep playing normally if this explorer stops."
           )
       - name: Upload standalone companion
         uses: actions/upload-artifact@v4
