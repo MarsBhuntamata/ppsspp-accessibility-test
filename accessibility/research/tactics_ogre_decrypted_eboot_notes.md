@@ -60,3 +60,25 @@ Four UI component name strings are followed, after padding, by contiguous 32-bit
 - Do **not** mistake the zero-filled `BOOT.BIN` or encrypted `EBOOT.BIN` for this `ULUS10565_EBOOT.BIN` dump.
 - Need to identify PPSSPP's runtime ELF load base, determine whether/where each table appears after relocation, and associate object instances with each user-identified screen.
 - Once birthday and name-entry objects are located, examine fields and transitions while stationary vs changing selected value; then produce a **screen-aware reader** with verified labels. No auto-speech on tentative data.
+
+## Name-entry logic study (2026-11-23)
+
+Reopened the actual user-supplied `ULUS10565_EBOOT.BIN` and disassembled `.text` from `0xDDC54` through `0xDEF4C`, rather than interpreting names alone.
+
+### Distinct paths in NameCharListWindow
+
+- At `0xDDC54` initialization creates a subordinate object, saves its pointer at **`this+0x19C`**, creates another and saves it at **`this+0x1A0`**, and assigns its parent through the child's `+0x88` field. Therefore the keyboard's character-list component is a **hierarchy of linked UI objects**, not a simple global cursor byte.
+- At `0xDDD50`, the routine reads unsigned bytes **`this+0x1A9`**, **`this+0x1AA`**, and **`this+0x1AB`** and conditionally calls functions including `0x1FEB5C` and `0x1FE7FC`. This suggests internal state/input branches, but exact meaning of those bytes is **not established**.
+- At `0xDE4C4`, it returns early when **`this+0x1A7`** is nonzero, otherwise branches on **`this+0x1A9`** and makes calls using the child pointers at `+0x19C` and `+0x1A0`.
+- At `0xDE544`, it again checks **`this+0x1A7`**, then calls `0x1F88DC` and writes the value **1 to `this+0x1A7`**, consistent with a one-shot gate/transition. That is evidence for a state gate but not yet proof of *which* transition.
+- At `0xDE5B0`, it checks **`this+0x1A4`** and **`this+0x1A5`**, calls `0xD5E4C`, and specifically branches on its return values **9** and **12**. Return-code meanings are **unverified**; don't infer PSP button IDs from those numbers.
+- A second table begins at ELF **`0x2A7858`**, reached by an indirect jump in function `0xDE6C0`. It dispatches on integers **1 through 10** (range check at `0xDE6E0`). This is an explicit **ten-case internal action/state dispatcher**, NOT necessarily ten keyboard keys.
+- At `0xDE764` (a case handled by the dispatcher), code reads a linked object via **`this+0x60`**, extracts **`linked+0x194`**, and reads **`linked+0x180`** with a range check **less than 5**. It also clears **`this+0xA8`** and **`this+0xB0`**. The use of a nested object is strong evidence that **menu identity and selection may be split across different objects**.
+
+### Related name-entry window
+- At `0xDED10`, a separate name-related method reads **`this+0xA8`** as an iteration bound; iterates records starting at **`this+0xB4`** with a **4-byte stride**, and accesses **`this+0xB0`** in a later loop. This is evidence for a bounded list/record representation, but it is NOT enough to equate `+0xA8` with entered name length without tracing the callees.
+
+### Useful conclusion
+The next research step should **not** be a global byte scan. First locate the *runtime instance pointer* for the `NameCharListWindow` object by tracing calls to the constructor at ELF code address `0xDDC54` (or identifying its relocated code/table). Then read `this+0x19C`, `this+0x1A0`, and the nested state at `this+0x60` to identify live components. After that, correlate `+0x1A4` to `+0x1AB`, `linked+0x180`, and `linked+0x194` against deliberate directional actions. Do not announce names or selections until their semantics are confirmed.
+
+This is **static code analysis**, not a verified live-memory address mapping. The current speaking companion remains unmodified.
