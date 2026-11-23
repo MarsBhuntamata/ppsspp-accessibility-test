@@ -82,3 +82,15 @@ Reopened the actual user-supplied `ULUS10565_EBOOT.BIN` and disassembled `.text`
 The next research step should **not** be a global byte scan. First locate the *runtime instance pointer* for the `NameCharListWindow` object by tracing calls to the constructor at ELF code address `0xDDC54` (or identifying its relocated code/table). Then read `this+0x19C`, `this+0x1A0`, and the nested state at `this+0x60` to identify live components. After that, correlate `+0x1A4` to `+0x1AB`, `linked+0x180`, and `linked+0x194` against deliberate directional actions. Do not announce names or selections until their semantics are confirmed.
 
 This is **static code analysis**, not a verified live-memory address mapping. The current speaking companion remains unmodified.
+
+## Live-memory mapping instrument (2026-11-23)
+
+A new **standalone**, read-only script `accessibility/companion/to_runtime_mapper.py` searches PSP user RAM for two independent literal strings from this ELF:
+- `NameCharListWindow` at ELF address `0x2A7818`;
+- `BirthDayInputMenu` at ELF address `0x2A7448`.
+
+For any putative match it requires the same calculated module base from both names. It then checks the first method-table target at ELF address `0xDDC54`, using only MIPS opcode/register bits that should survive relocation. Finally it checks the relocated `NameCharListWindow` method table at `0x2A7830` begins with a pointer to that method. **Only after validation**, it searches RAM for pointer slots holding the method table's runtime address. The result is a diagnostic `tactics-ogre-runtime-objects.txt`, with all candidate pointer slots clearly marked **unverified**.
+
+This is not yet a character speaker. A pointer slot is not necessarily the active object, and method tables might instead be referenced indirectly. No menu labels or gameplay cursor guesses are spoken. The v11 companion is not modified. If the game relocates the table in an unexpected way, the script logs the mismatch and stops rather than presenting wrong object addresses.
+
+The standalone Windows executable `TacticsOgreRuntimeMapper.exe` is packaged alongside the existing `TacticsOgreCompanion.exe` (not replacing it). Test while the name keyboard is open. The scan covers PSP user RAM `0x08800000..0x0A000000` using 64-KiB read-only debugger requests. No new .BIN upload is required.
