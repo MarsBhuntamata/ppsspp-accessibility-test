@@ -39,10 +39,10 @@ jobs:
           New-Item -ItemType Directory -Force -Path package | Out-Null
           Copy-Item dist/TacticsOgreCompanion.exe package/
           Set-Content -Path package/READ_ME_FIRST.txt -Encoding UTF8 -Value @(
-            "TACTICS OGRE GAMEPLAY CURSOR DISCOVERY v10",
+            "TACTICS OGRE TAROT RESEARCH v11",
             "",
             "Use your normal stock PPSSPP with remote debugger 127.0.0.1:56244.",
-            "This is for CHARACTER CREATION AND GAMEPLAY menus.",
+            "This investigates character creation and gameplay without inventing menu choices.",
             "The old v8.1 title speaker and v9.2 explorer remain available in previous runs.",
             "",
             "1. Extract the zip to a writable folder.",
@@ -54,9 +54,9 @@ jobs:
             "7. Return to the console, press Q, and upload tactics-ogre-gameplay-cursors.txt.",
             "",
             "Seven focused 4 KiB memory windows are read on each input release.",
-            "Known title menu indices may be spoken. Unknown screens are researched.",
-            "Unknown menus are NOT fully accessible or text-readable yet.",
-            "New address candidates may say numbered options only after repeated returns.",
+            "Only the two previously verified opening-menu cursor addresses are spoken.",
+            "Unknown menus are NOT yet accessible or text-readable. The log captures candidate state.",
+            "Unknown popups and tarot screens stay silent rather than speak random options.",
             "The current input phase number is not a verified screen identifier.",
             "No OCR, modified PPSSPP, memory writes, or game inputs from this app.",
             "If this diagnostic stops unexpectedly, PPSSPP keeps running."
