@@ -60,7 +60,7 @@ jobs:
             "You can keep playing your game if the companion fails.",
             "Each action takes TWO memory snapshots to compare stationary states.",
             "This version scans previously untested RAM gaps; prior candidate was a graphics buffer.",
-            "Important: Each capture reads four 2 MiB memory windows twice; stalls are possible.",
+            "Important: Each capture reads two previously untested memory regions (8 MiB total) twice; stalls are possible.",
             "If no input broadcasts appear, the trace makes that visible for debugging."
           )
       - name: Upload standalone companion
