@@ -14,7 +14,7 @@ import sys
 import time
 
 import websocket
-from to_target_watch import Connection, PORT, GAME_IDS
+from to_target_watch import Connection, PORT, GAME_IDS, stop_requested
 from to_runtime_mapper import folder, read, matches_relocated_method, METHOD_ELF, METHOD_PREFIX
 from to_menu_explorer import release_events
 from to_speaking_title import Speaker
@@ -57,6 +57,9 @@ def run(port, log, speaker, max_seconds=MAX_SECONDS, max_reconnects=MAX_RECONNEC
     had_connected = False
     try:
         while time.monotonic() < deadline:
+            if stop_requested():
+                log.write("USER_STOP_Q\n")
+                break
             if conn is None:
                 if reconnects > max_reconnects:
                     log.write("STOP reconnect_limit\n")
