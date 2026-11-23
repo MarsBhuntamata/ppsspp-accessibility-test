@@ -82,29 +82,22 @@ def read_windows(conn):
 
 
 def small_changes(before, after, cap=MAX_CHANGES):
-    """Compact low-valued byte changes; avoid dumping entire volatile screens."""
-    found = []
+    """Compact low-valued changes sampled fairly across 64 KiB windows."""
+    chosen = []
     total = 0
     for start, old in before.items():
         new = after[start]
         if len(old) != len(new):
             raise ValueError("Mismatched samples")
+        emitted = 0
         for i, (a, b) in enumerate(zip(old, new)):
             if a != b and a < 16 and b < 16:
                 total += 1
-                if len(found) < cap * len(before):
-                    found.append((start + i, a, b))
-    # Preserve representative samples across windows rather than only the
-    # lowest-address noisy window.
-    chosen = []
-    per_window = Counter()
-    for row in sorted(found, key=lambda r: (r[0] != ADDRESS, r[0])):
-        page = row[0] & ~0xFFFF
-        if per_window[page] < cap:
-            chosen.append(row)
-            per_window[page] += 1
+                if emitted < cap:
+                    chosen.append((start + i, a, b))
+                    emitted += 1
+    chosen.sort(key=lambda r: (r[0] != ADDRESS, r[0]))
     return total, chosen
-
 
 def return_candidates(a, b, c, limit_per_window=12):
     """A-B-A low-valued states, stable across a three-position trajectory."""
