@@ -39,7 +39,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path package | Out-Null
           Copy-Item dist/TacticsOgreCompanion.exe package/
           Set-Content -Path package/READ_ME_FIRST.txt -Encoding UTF8 -Value @(
-            "TACTICS OGRE SPEAKING TITLE MENU v8",
+            "TACTICS OGRE SPEAKING TITLE MENU v8.1",
             "",
             "This uses your existing, working PPSSPP. DO NOT use any modified PPSSPP build.",
             "This version SPEAKS provisional names for the first three title selections.",
