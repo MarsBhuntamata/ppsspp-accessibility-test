@@ -39,10 +39,10 @@ jobs:
           New-Item -ItemType Directory -Force -Path package | Out-Null
           Copy-Item dist/TacticsOgreCompanion.exe package/
           Set-Content -Path package/READ_ME_FIRST.txt -Encoding UTF8 -Value @(
-            "TACTICS OGRE SPEAKING MENU EXPLORER v9.1",
+            "TACTICS OGRE FAST SPEAKING MENU EXPLORER v9.2",
             "",
             "Use your EXISTING STOCK PPSSPP, with localhost remote debugger port 56244.",
-            "This version restores cautious speech during new menu investigation.",
+            "This version uses one 4KiB cursor read per navigation, not eight slow scans.",
             "The working v8 title reader remains available in older workflow runs.",
             "",
             "1. Extract TacticsOgreCompanion.exe into a writable folder.",
@@ -50,15 +50,15 @@ jobs:
             "3. Launch this EXE, then navigate to Load Game or your chosen next menu.",
             "4. Browse naturally with Up/Down/Left/Right, Cross to confirm, Circle to back out.",
             "5. Explore several options, sometimes revisiting one with Down then Up.",
-            "6. The companion speaks possible menu transitions and unverified numbered options when memory supports them.",
+            "6. The companion speaks short Option 1, Option 2 etc only when the watched cursor changes.",
             "7. Return to companion window and press Q to stop.",
             "8. Upload tactics-ogre-menu-explorer.txt from beside the EXE.",
             "",
             "Only memory reads. No OCR. No modified emulator. Does not change games or saves.",
-            "Selection numbers in other menus are PROVISIONAL; item names are not decoded.",
+            "Numbers in unknown menus remain hypothetical; no verbal unverified repetition.",
             "This companion records candidates for later accessibility development.",
             "Do not confuse a possible transition with a verified game menu.",
-            "Each event reads 8 separate 64 KiB PSP memory windows, not the entire RAM.",
+            "Each navigation reads just 4KiB. Larger memory scans run only when idle.",
             "If the menu's game state is elsewhere, the trace may have no viable cursor.",
             "The companion never sends game input; it observes your normal controls.",
             "You can keep playing normally if this explorer stops."
