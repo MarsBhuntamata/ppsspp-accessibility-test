@@ -39,17 +39,17 @@ jobs:
           New-Item -ItemType Directory -Force -Path package | Out-Null
           Copy-Item dist/TacticsOgreCompanion.exe package/
           Set-Content -Path package/READ_ME_FIRST.txt -Encoding UTF8 -Value @(
-            "TACTICS OGRE SPEAKING TITLE MENU v7",
+            "TACTICS OGRE SPEAKING TITLE MENU v8",
             "",
             "This uses your existing, working PPSSPP. DO NOT use any modified PPSSPP build.",
-            "This version SPEAKS numbered title menu selections; other menus are not supported yet.",
+            "This version SPEAKS provisional names for the first three title selections.",
             "",
             "1. Leave the companion EXE in its own writable folder.",
             "2. Start your usual PPSSPP with remote debugger enabled on localhost port 56244.",
             "3. Load Tactics Ogre One Vision and open the TITLE menu.",
             "4. Double-click TacticsOgreCompanion.exe. You will hear/read the console status.",
-            "5. On title menu, press DOWN and UP. Listen for numbered menu options.",
-            "Announcements occur when the selected index changes.",
+            "5. On title menu, press DOWN and UP. Listen for New Game, Load Game and Continue.",
+            "These names are provisional, not yet verified on your screen.",
             "6. When finished, return to the companion console and press Q to stop recording.",
             "7. If selection or speech fails, upload tactics-ogre-speaking-log.txt beside this EXE.",
             "",
@@ -59,7 +59,7 @@ jobs:
             "This app connects only to 127.0.0.1:56244; it cannot upload your data.",
             "You can keep playing your game if the companion fails.",
             "One small 4 KiB snapshot is taken after each directional release.",
-            "The selection index is provisionally confirmed; labels remain unverified.",
+            "You can edit tactics-ogre-title-labels.txt beside the EXE to correct label order.",
             "No 8 MiB scans. Each memory read is only 4 KiB.",
             "Windows SAPI speaks by default. Optional official NVDA Controller Client DLL enables NVDA speech."
           )
