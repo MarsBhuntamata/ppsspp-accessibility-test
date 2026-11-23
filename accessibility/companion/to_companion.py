@@ -57,53 +57,46 @@ def output_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
-def changed_words(before: bytes, after: bytes, address: int = BASE):
-    """A bounded, representative subset across 64 KiB blocks of a memory region."""
-    if len(before) != len(after) or len(before) % 4:
-        raise ValueError("Mismatched or unaligned snapshots")
-    changes = []
-    total = 0
-    for block in range(0, len(before), COMPARE_BLOCK):
-        emitted = 0
-        for off in range(block, min(block + COMPARE_BLOCK, len(before)), 4):
-            a = before[off:off + 4]
-            b = after[off:off + 4]
-            if a == b:
-                continue
-            total += 1
-            if emitted < MAX_CHANGES_PER_BLOCK:
-                changes.append((address + off, int.from_bytes(a, "little"), int.from_bytes(b, "little")))
-                emitted += 1
-    return total, changes
-
-
-def stable_changed_words(prev_first, prev_second, current_first, current_second,
-                         start, limit=24):
-    """Selection candidates must be stationary within both observations.
-
-    Two reads of a stationary cursor should agree. Moving graphics, counters
-    and animations are discarded even if they changed during navigation.
-    """
-    if not (len(prev_first) == len(prev_second) ==
-            len(current_first) == len(current_second)):
+def analyze_triplet(a, b, c, *, base=BASE, limit=80):
+    """Find low-valued bytes stable at A, B, A with return to original."""
+    if len({len(x) for pair in (a, b, c) for x in pair}) != 1:
         raise ValueError("Snapshot sizes differ")
-    result = []
-    stable_total = 0
-    for off in range(0, len(prev_first), 4):
-        old = prev_second[off:off + 4]
-        new = current_second[off:off + 4]
-        if (old == new or old != prev_first[off:off + 4] or
-                new != current_first[off:off + 4]):
+    count = 0
+    rows = []
+    for offset in range(len(a[0])):
+        av, bv, cv = a[1][offset], b[1][offset], c[1][offset]
+        if (av == bv or av != cv or av >= 16 or bv >= 16 or
+                av != a[0][offset] or bv != b[0][offset] or
+                cv != c[0][offset]):
             continue
-        stable_total += 1
-        before = int.from_bytes(old, "little")
-        after = int.from_bytes(new, "little")
-        if len(result) < limit * 4:
-            result.append((start + off, before, after))
-    # Small index-like values first, then keep a sample of other stable words.
-    result.sort(key=lambda x: (not (x[1] < 128 and x[2] < 128),
-                               not (abs(x[1] - x[2]) <= 4), x[0]))
-    return stable_total, result[:limit]
+        count += 1
+        if len(rows) < limit:
+            rows.append((base + offset, av, bv))
+    return count, rows
+
+
+def classify_triplet(first, middle, last, directions, regions=REGIONS):
+    matches = []
+    total = 0
+    for (start, _), a, b, c in zip(regions, first, middle, last):
+        count, items = analyze_triplet(a, b, c, base=start)
+        total += count
+        matches.extend(items)
+    reverse = (directions[0] in ("up", "down") and
+               directions[1] in ("up", "down") and
+               directions[0] != directions[1])
+    return reverse, total, matches
+
+
+def summarize_candidates(scores, veto, limit=20):
+    ranked = []
+    for addr, row in scores.items():
+        penalty = veto.get(addr, 0)
+        score = row["returns"] * 3 - penalty * 5
+        if score > 0:
+            ranked.append((score, row["returns"], penalty, addr, sorted(row["pairs"])))
+    ranked.sort(key=lambda item: (-item[0], -item[1], item[3]))
+    return ranked[:limit]
 
 
 def stop_requested():
@@ -189,7 +182,7 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
     import websocket
     print("Tactics Ogre companion: read-only memory navigation test.", flush=True)
     print("Use your regular PPSSPP. No game controls will be sent.", flush=True)
-    log.write("TACTICS OGRE EXTERNAL COMPANION TRACE v3\n")
+    log.write("TACTICS OGRE EXTERNAL COMPANION TRACE v4\n")
     log.write(f"START {datetime.now().isoformat(timespec='seconds')}\n")
     log.flush()
     try:
@@ -214,8 +207,8 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
         for start, size in REGIONS:
             log.write(f"REGION 0x{start:08X} {size}\n")
         log.flush()
-        print("Connected to Tactics Ogre. Scanning four separate game-memory regions.", flush=True)
-        print("Use alternating Up/Down in one menu, if possible.", flush=True)
+        print("Connected to Tactics Ogre. Checking return-to-position patterns.", flush=True)
+        print("On title menu, try Down Up Down Up, then Down Down Up Up.", flush=True)
         print("Capturing automatically. No extra hotkeys or terminal focus needed.", flush=True)
         print("No action limit. To finish, return to this window and press Q.", flush=True)
         print("Or press Ctrl+C in this window. The current trace is saved after each action.", flush=True)
@@ -224,6 +217,9 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
         baseline_first = conn.snapshot()
         time.sleep(0.30)
         baseline = conn.snapshot()
+        history = [((baseline_first, baseline), None)]
+        scores = {}
+        veto = {}
         log.write("BASELINE stationary pair captured\n")
         log.flush()
         captures = 0
@@ -261,32 +257,39 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
             snapshot = conn.snapshot()
             captures += 1
             log.write(f"ACTION {captures} {direction}\n")
-            total = 0
-            logged = 0
-            for (start, size), previous_bytes, current_bytes in zip(REGIONS, baseline, snapshot):
-                count, changes = changed_words(previous_bytes, current_bytes, start)
-                total += count
-                logged += len(changes)
-                log.write(f"REGION_CHANGE 0x{start:08X} changed={count}\n")
-                for address, before, after in changes:
-                    log.write(f"{address:08X} {before:08X} {after:08X}\n")
-            stable_total = 0
-            stable_logged = 0
-            for (start, _), old_first, old_second, new_first, new_second in zip(
-                    REGIONS, baseline_first, baseline, snapshot_first, snapshot):
-                count, candidates = stable_changed_words(
-                    old_first, old_second, new_first, new_second, start)
-                stable_total += count
-                stable_logged += len(candidates)
-                log.write(f"STABLE_REGION 0x{start:08X} changed={count}\n")
-                for address, before, after in candidates:
-                    log.write(f"CANDIDATE {address:08X} {before:08X} {after:08X}\n")
-            baseline_first = snapshot_first
-            baseline = snapshot
-            log.write(f"END_ACTION changed={total} logged={logged} stable={stable_total} candidates={stable_logged}\n")
+            history.append(((snapshot_first, snapshot), direction))
+            if len(history) > 3:
+                history.pop(0)
+            if len(history) == 3:
+                (aa, _), (bb, d1), (cc, d2) = history
+                a_reg = list(zip(aa[0], aa[1]))
+                b_reg = list(zip(bb[0], bb[1]))
+                c_reg = list(zip(cc[0], cc[1]))
+                reverse, matched, rows = classify_triplet(
+                    a_reg, b_reg, c_reg, (d1, d2))
+                kind = "RETURN" if reverse else "SAME_DIRECTION"
+                log.write(f"TRIPLET {kind} matched_low_bytes={matched} samples={len(rows)}\n")
+                for address, av, bv in rows:
+                    if reverse:
+                        item = scores.setdefault(address, {"returns": 0, "pairs": set()})
+                        item["returns"] += 1
+                        item["pairs"].add((av, bv))
+                    else:
+                        veto[address] = veto.get(address, 0) + 1
+            log.write(f"ACTION_END {captures} {direction}\n")
+            if captures % 4 == 0:
+                leaders = summarize_candidates(scores, veto, 8)
+                log.write(f"RANKING after={captures} count={len(leaders)}\n")
+                for rank, returns, penalty, addr, pairs in leaders:
+                    log.write(f"RANK {addr:08X} score={rank} returns={returns} alternation={penalty} values={pairs}\n")
             log.flush()
-            print(f"Captured {captures}: {direction}; {stable_total} stable changes.", flush=True)
+            print(f"Recorded {captures}: {direction}. Return patterns: {len(scores)}.", flush=True)
             last_report = time.monotonic()
+        leaders = summarize_candidates(scores, veto)
+        log.write(f"FINAL_CANDIDATES {len(leaders)}\n")
+        for rank, returns, penalty, addr, pairs in leaders:
+            log.write(f"RANK {addr:08X} score={rank} returns={returns} alternation={penalty} values={pairs}\n")
+        log.flush()
         if max_captures is not None and captures >= max_captures:
             log.write("FINISHED action limit reached\n")
             log.flush()
