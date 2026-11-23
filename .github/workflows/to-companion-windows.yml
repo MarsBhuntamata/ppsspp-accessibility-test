@@ -30,7 +30,7 @@ jobs:
       - name: Build single-file Windows program
         shell: pwsh
         run: |
-          python -m PyInstaller --clean --noconfirm --onefile --console --name TacticsOgreCompanion accessibility/companion/to_menu_explorer.py
+          python -m PyInstaller --clean --noconfirm --onefile --console --name TacticsOgreCompanion accessibility/companion/to_gameplay_cursor.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (!(Test-Path dist/TacticsOgreCompanion.exe)) { throw "Companion EXE missing" }
       - name: Package accessible instructions
@@ -39,29 +39,27 @@ jobs:
           New-Item -ItemType Directory -Force -Path package | Out-Null
           Copy-Item dist/TacticsOgreCompanion.exe package/
           Set-Content -Path package/READ_ME_FIRST.txt -Encoding UTF8 -Value @(
-            "TACTICS OGRE FAST SPEAKING MENU EXPLORER v9.2",
+            "TACTICS OGRE GAMEPLAY CURSOR DISCOVERY v10",
             "",
-            "Use your EXISTING STOCK PPSSPP, with localhost remote debugger port 56244.",
-            "This version uses one 4KiB cursor read per navigation, not eight slow scans.",
-            "The working v8 title reader remains available in older workflow runs.",
+            "Use your normal stock PPSSPP with remote debugger 127.0.0.1:56244.",
+            "This is for CHARACTER CREATION AND GAMEPLAY menus.",
+            "The old v8.1 title speaker and v9.2 explorer remain available in previous runs.",
             "",
-            "1. Extract TacticsOgreCompanion.exe into a writable folder.",
-            "2. Launch One Vision in stock PPSSPP and get to the title menu.",
-            "3. Launch this EXE, then navigate to Load Game or your chosen next menu.",
-            "4. Browse naturally with Up/Down/Left/Right, Cross to confirm, Circle to back out.",
-            "5. Explore several options, sometimes revisiting one with Down then Up.",
-            "6. The companion speaks short Option 1, Option 2 etc only when the watched cursor changes.",
-            "7. Return to companion window and press Q to stop.",
-            "8. Upload tactics-ogre-menu-explorer.txt from beside the EXE.",
+            "1. Extract the zip to a writable folder.",
+            "2. Start Tactics Ogre One Vision in regular PPSSPP.",
+            "3. Start TacticsOgreCompanion.exe.",
+            "4. Enter character generation or a normal in-game menu.",
+            "5. Navigate using Up/Down/Left/Right; occasionally reverse direction.",
+            "6. Continue into another menu if available. Confirm and cancel are recorded.",
+            "7. Return to the console, press Q, and upload tactics-ogre-gameplay-cursors.txt.",
             "",
-            "Only memory reads. No OCR. No modified emulator. Does not change games or saves.",
-            "Numbers in unknown menus remain hypothetical; no verbal unverified repetition.",
-            "This companion records candidates for later accessibility development.",
-            "Do not confuse a possible transition with a verified game menu.",
-            "Each navigation reads just 4KiB. Larger memory scans run only when idle.",
-            "If the menu's game state is elsewhere, the trace may have no viable cursor.",
-            "The companion never sends game input; it observes your normal controls.",
-            "You can keep playing normally if this explorer stops."
+            "Seven focused 4 KiB memory windows are read on each input release.",
+            "Known title menu indices may be spoken. Unknown screens are researched.",
+            "Unknown menus are NOT fully accessible or text-readable yet.",
+            "New address candidates may say numbered options only after repeated returns.",
+            "The current input phase number is not a verified screen identifier.",
+            "No OCR, modified PPSSPP, memory writes, or game inputs from this app.",
+            "If this diagnostic stops unexpectedly, PPSSPP keeps running."
           )
       - name: Upload standalone companion
         uses: actions/upload-artifact@v4
