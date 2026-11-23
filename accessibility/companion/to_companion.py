@@ -18,13 +18,13 @@ import sys
 import time
 
 GAME_IDS = {"ULUS10565", "ULES10500", "ULJM05753"}
-# The previous 0x08800000..0x08A00000 area remained completely static.
-# Scan representative windows throughout 32 MiB of mapped game RAM instead.
+# v5: scan 8 MiB of previously UNTESTED memory, avoiding confirmed
+# graphics-buffer flips at 0x09175FDC and 0x08DD8FDC.
+# These spans cover the largest missing game-RAM gap (0x092..0x098)
+# plus the gap 0x09A..0x09C. Not an exhaustive PSP RAM search.
 REGIONS = (
-    (0x08C00000, 0x00200000),
-    (0x09000000, 0x00200000),
-    (0x09800000, 0x00200000),
-    (0x09C00000, 0x00200000),
+    (0x09200000, 0x00600000),
+    (0x09A00000, 0x00200000),
 )
 BASE = REGIONS[0][0]  # Legacy default for changed_words unit tests.
 REGION_SIZE = REGIONS[0][1]
@@ -186,7 +186,7 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
     import websocket
     print("Tactics Ogre companion: read-only memory navigation test.", flush=True)
     print("Use your regular PPSSPP. No game controls will be sent.", flush=True)
-    log.write("TACTICS OGRE EXTERNAL COMPANION TRACE v4\n")
+    log.write("TACTICS OGRE EXTERNAL COMPANION TRACE v5\n")
     log.write(f"START {datetime.now().isoformat(timespec='seconds')}\n")
     log.flush()
     try:
@@ -211,7 +211,7 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
         for start, size in REGIONS:
             log.write(f"REGION 0x{start:08X} {size}\n")
         log.flush()
-        print("Connected to Tactics Ogre. Checking return-to-position patterns.", flush=True)
+        print("Connected to Tactics Ogre. Scanning previously untested RAM for return-to-position patterns.", flush=True)
         print("On title menu, try Down Up Down Up, then Down Down Up Up.", flush=True)
         print("Capturing automatically. No extra hotkeys or terminal focus needed.", flush=True)
         print("No action limit. To finish, return to this window and press Q.", flush=True)
@@ -255,12 +255,14 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
                 continue
             direction = directions[0]
             # Let gameplay process input; no CPU break or pause request.
+            capture_started = time.monotonic()
             time.sleep(0.25)
             snapshot_first = conn.snapshot()
             time.sleep(0.30)
             snapshot = conn.snapshot()
             captures += 1
-            log.write(f"ACTION {captures} {direction}\n")
+            elapsed = time.monotonic() - capture_started
+            log.write(f"ACTION {captures} {direction} scan_seconds={elapsed:.2f}\n")
             history.append(((snapshot_first, snapshot), direction))
             if len(history) > 3:
                 history.pop(0)
@@ -287,7 +289,7 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
                 for rank, returns, penalty, addr, pairs in leaders:
                     log.write(f"RANK {addr:08X} score={rank} returns={returns} alternation={penalty} values={pairs}\n")
             log.flush()
-            print(f"Recorded {captures}: {direction}. Return patterns: {len(scores)}.", flush=True)
+            print(f"Recorded {captures}: {direction}, scan {elapsed:.1f}s. Return patterns: {len(scores)}.", flush=True)
             signal("capture")
             last_report = time.monotonic()
         leaders = summarize_candidates(scores, veto)
