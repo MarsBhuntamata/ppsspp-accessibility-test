@@ -23,14 +23,14 @@ jobs:
           python-version: "3.11"
       - name: Install Python requirements and packager
         shell: pwsh
-        run: python -m pip install --disable-pip-version-check websocket-client==1.8.0 pyinstaller==6.16.0
+        run: python -m pip install --disable-pip-version-check websocket-client==1.8.0 pyinstaller==6.16.0 pywin32
       - name: Run standalone companion tests
         shell: pwsh
         run: python -m unittest discover -s accessibility/companion -p "test_*.py" -v
       - name: Build single-file Windows program
         shell: pwsh
         run: |
-          python -m PyInstaller --clean --noconfirm --onefile --console --name TacticsOgreCompanion accessibility/companion/to_target_watch.py
+          python -m PyInstaller --clean --noconfirm --onefile --console --name TacticsOgreCompanion accessibility/companion/to_speaking_title.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (!(Test-Path dist/TacticsOgreCompanion.exe)) { throw "Companion EXE missing" }
       - name: Package accessible instructions
@@ -39,29 +39,29 @@ jobs:
           New-Item -ItemType Directory -Force -Path package | Out-Null
           Copy-Item dist/TacticsOgreCompanion.exe package/
           Set-Content -Path package/READ_ME_FIRST.txt -Encoding UTF8 -Value @(
-            "TACTICS OGRE EXTERNAL COMPANION v6: focused candidate verification",
+            "TACTICS OGRE SPEAKING TITLE MENU v7",
             "",
             "This uses your existing, working PPSSPP. DO NOT use any modified PPSSPP build.",
-            "This is diagnostic memory observation, not a finished NVDA menu reader.",
+            "This version SPEAKS numbered title menu selections; other menus are not supported yet.",
             "",
             "1. Leave the companion EXE in its own writable folder.",
             "2. Start your usual PPSSPP with remote debugger enabled on localhost port 56244.",
             "3. Load Tactics Ogre One Vision and open the TITLE menu.",
             "4. Double-click TacticsOgreCompanion.exe. You will hear/read the console status.",
-            "5. In title menu, press DOWN UP DOWN UP, then DOWN DOWN UP UP.",
-            "Wait for a short beep after each movement; this watch should be much quicker.",
+            "5. On title menu, press DOWN and UP. Listen for numbered menu options.",
+            "Announcements occur when the selected index changes.",
             "6. When finished, return to the companion console and press Q to stop recording.",
-            "7. After it says finished, upload tactics-ogre-companion-trace.txt beside this EXE.",
+            "7. If selection or speech fails, upload tactics-ogre-speaking-log.txt beside this EXE.",
             "",
-            "If an ERROR or HEARTBEAT appears in the trace, upload that same trace anyway.",
-            "The trace updates after each action; Ctrl+C also ends recording.",
+            "If there is an ERROR or HEARTBEAT in the log, upload the log.",
+            "The speech log updates after each action; Ctrl+C also ends recording.",
             "No OCR, Python installation, debugger commands, ISO changes, or game saves are needed.",
             "This app connects only to 127.0.0.1:56244; it cannot upload your data.",
             "You can keep playing your game if the companion fails.",
             "One small 4 KiB snapshot is taken after each directional release.",
-            "Candidate 0x0964271C is unverified. Watch is read-only; no menu names yet.",
+            "The selection index is provisionally confirmed; labels remain unverified.",
             "No 8 MiB scans. Each memory read is only 4 KiB.",
-            "If no input broadcasts appear, the trace makes that visible for debugging."
+            "Windows SAPI speaks by default. Optional official NVDA Controller Client DLL enables NVDA speech."
           )
       - name: Upload standalone companion
         uses: actions/upload-artifact@v4
