@@ -55,6 +55,10 @@ class ExplorerTests(unittest.TestCase):
         finally:
             explorer.WINDOWS = prior
 
+    def test_title_name_mapping_available_to_explorer(self):
+        self.assertEqual(explorer.selection_announcement(0, {0: "New Game"}), "New Game")
+        self.assertEqual(explorer.selection_announcement(1, {}), "Title menu, option 2")
+
     def test_sparse_low_value_changes(self):
         base = explorer.WINDOWS[0]
         old = {base: bytes([0, 99, 2])}
