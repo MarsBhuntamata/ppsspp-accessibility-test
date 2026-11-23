@@ -94,3 +94,25 @@ For any putative match it requires the same calculated module base from both nam
 This is not yet a character speaker. A pointer slot is not necessarily the active object, and method tables might instead be referenced indirectly. No menu labels or gameplay cursor guesses are spoken. The v11 companion is not modified. If the game relocates the table in an unexpected way, the script logs the mismatch and stops rather than presenting wrong object addresses.
 
 The standalone Windows executable `TacticsOgreRuntimeMapper.exe` is packaged alongside the existing `TacticsOgreCompanion.exe` (not replacing it). Test while the name keyboard is open. The scan covers PSP user RAM `0x08800000..0x0A000000` using 64-KiB read-only debugger requests. No new .BIN upload is required.
+
+## Runtime mapping result, user v12 trace (2026-11-23)
+
+The first actual v12 probe with Tactics Ogre ULUS10565 in PPSSPP **successfully verified**:
+- `ELF_LOAD_BASE = 0x08804000`.
+- `NameCharListWindow` string at runtime `0x08AAB818`.
+- `BirthDayInputMenu` string at runtime `0x08AAB448`.
+- Executable method at `0x088E1C54`, instruction prefix `b008043c405a8424cbe5270e`.
+- Method table at `0x08AAB830` with first function pointer `0x088E1C54`.
+- **Zero** 32-bit RAM slots directly holding pointer to `0x08AAB830`. This strongly argues against assuming the method table is stored verbatim in an active object, though other construction/indirection patterns remain possible. It does NOT imply the keyboard does not exist.
+
+The source trace's 14.1-second scan was read-only, and it yielded no object pointer. We must not treat an ELF-relative function table as the active object.
+
+## Targeted name-entry constructor instrumentation v13
+
+The new standalone `accessibility/companion/to_name_object_hit.py` uses the **verified** executable location of `0x088E1C54` (derived dynamically from two strings + code signature), rather than scanning for nonexistent vtable pointers.
+
+It arms **one temporary instruction breakpoint** and asks the tester to proceed from the opening menus into the name keyboard. PPSSPP pauses at the first hit. The helper reads GPR `s0` (register 16) while stopped because the nearby instructions at ELF `0xDDCA8` and `0xDDCF4` access `this+0x19C` and `this+0x1A0` via `s0`. Then it removes the breakpoint, resumes PPSSPP, and captures a read-only snapshot of the object and possible linked objects. It logs `OBJECT_CANDIDATE_S0`, `OBJECT_SNAPSHOT`, `FIELD`, `LINKED_CANDIDATE`, etc. A missing hit or unexpected signature is logged without claiming a cursor.
+
+**Important change in tool behavior:** This is the first probe that temporarily pauses execution with a breakpoint. It does NOT write game RAM, but does modify PPSSPP's temporary debugger state and then cleans it up. Run only while starting **before** the name keyboard; if the name-entry initialization already occurred, the breakpoint may not trigger. The old title speech remains unmodified. The tool refuses to overwrite an existing breakpoint at the address or start if PPSSPP was already paused.
+
+Once the tester returns `tactics-ogre-name-object-hit.txt`, inspect whether `s0` is a valid user RAM pointer and whether `this+0x19C` / `this+0x1A0` become valid child pointers. If so, implement a focused live object watcher rather than another arbitrary byte scan.
