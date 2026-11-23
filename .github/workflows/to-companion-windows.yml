@@ -39,6 +39,9 @@ jobs:
           python -m PyInstaller --clean --noconfirm --onefile --console --name TacticsOgreNameObjectTrace accessibility/companion/to_name_object_hit.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (!(Test-Path dist/TacticsOgreNameObjectTrace.exe)) { throw "Name object tracer EXE missing" }
+          python -m PyInstaller --clean --noconfirm --onefile --console --name TacticsOgreTransitionWatch accessibility/companion/to_transition_watch.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (!(Test-Path dist/TacticsOgreTransitionWatch.exe)) { throw "Transition watcher EXE missing" }
       - name: Package accessible instructions
         shell: pwsh
         run: |
@@ -46,8 +49,19 @@ jobs:
           Copy-Item dist/TacticsOgreCompanion.exe package/
           Copy-Item dist/TacticsOgreRuntimeMapper.exe package/
           Copy-Item dist/TacticsOgreNameObjectTrace.exe package/
+          Copy-Item dist/TacticsOgreTransitionWatch.exe package/
           Set-Content -Path package/READ_ME_FIRST.txt -Encoding UTF8 -Value @(
-            "TACTICS OGRE TAROT RESEARCH v11 + NAME OBJECT TRACE v13",
+            "TACTICS OGRE TAROT RESEARCH v11 + PASSIVE TRANSITION WATCH v14",
+            "",
+            "NEW v14 TRANSITION WATCH (safe, NO breakpoints):",
+            "1. Restart PPSSPP to clear any possible old v13 breakpoint.",
+            "2. Start Tactics Ogre at opening menu in regular PPSSPP.",
+            "3. Run TacticsOgreTransitionWatch.exe and hear the ready announcement.",
+            "4. Navigate into name-entry keyboard and other character creation menus.",
+            "5. Return to watcher console and press Q to finish.",
+            "6. Upload tactics-ogre-transition-v14.txt from beside the executable.",
+            "7. If PPSSPP closes the debugger socket, v14 will attempt reconnection.",
+            "8. v14 DOES NOT set breakpoints, pause game, or write game memory.",
             "",
             "NEW NAME OBJECT TRACE (single temporary breakpoint):",
             "1. Launch Tactics Ogre in PPSSPP and stay on the title/opening menus.",
