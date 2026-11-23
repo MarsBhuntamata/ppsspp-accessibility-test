@@ -85,6 +85,11 @@ def run(port, log, speaker, timeout=BREAK_TIMEOUT):
         if not matches_relocated_method(code):
             log.write(f"INVALID_METHOD at=0x{breakpoint_at:08X} code={code.hex()}\n")
             return 1
+        status_before = conn.request("cpu.status")
+        if status_before.get("stepping"):
+            log.write("ALREADY_PAUSED refuse to interfere with another debugger\n")
+            return 1
+        initial_running = True
         existing = conn.request("cpu.breakpoint.list").get("breakpoints") or []
         if any(item.get("address") == breakpoint_at for item in existing):
             log.write("EXISTING_BREAKPOINT refuse to replace user breakpoint\n")
