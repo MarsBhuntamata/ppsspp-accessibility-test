@@ -59,6 +59,36 @@ class ExplorerTests(unittest.TestCase):
         self.assertEqual(explorer.selection_announcement(0, {0: "New Game"}), "New Game")
         self.assertEqual(explorer.selection_announcement(1, {}), "Title menu, option 2")
 
+    def test_fast_cursor_selection(self):
+        a, b = explorer.FAST_CURSORS
+        old = {a: 0, b: 0}
+        new = {a: 1, b: 0}
+        self.assertEqual(explorer.select_cursor(old, new, 1), (a, 1))
+        self.assertEqual(explorer.select_cursor(old, new, 2), (a, 1))
+        new = {a: 0, b: 1}
+        self.assertEqual(explorer.select_cursor(old, new, 2), (b, 1))
+        self.assertEqual(explorer.select_cursor(old, old, 2), (None, None))
+
+    def test_fast_speech_is_short(self):
+        self.assertEqual(explorer.speech_label(7, explorer.ADDRESS, 2, {}), "Option 3")
+        self.assertNotIn("unverified", explorer.speech_label(7, explorer.ADDRESS, 2, {}))
+
+    def test_fast_read_samples_full_region_once(self):
+        import base64
+        class ConnectionStub:
+            def __init__(self):
+                self.calls = []
+            def request(self, event, **kwargs):
+                self.calls.append((event, kwargs))
+                data = bytearray(explorer.FAST_SIZE)
+                data[explorer.FAST_OFFSETS[explorer.ADDRESS]] = 2
+                return {"base64": base64.b64encode(data).decode("ascii")}
+        conn = ConnectionStub()
+        result = explorer.read_fast(conn)
+        self.assertEqual(result[explorer.ADDRESS], 2)
+        self.assertEqual(len(conn.calls), 1)
+        self.assertEqual(conn.calls[0][1]["size"], 4096)
+
     def test_sparse_low_value_changes(self):
         base = explorer.WINDOWS[0]
         old = {base: bytes([0, 99, 2])}
