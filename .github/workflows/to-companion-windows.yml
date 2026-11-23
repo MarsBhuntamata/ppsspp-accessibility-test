@@ -39,7 +39,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path package | Out-Null
           Copy-Item dist/TacticsOgreCompanion.exe package/
           Set-Content -Path package/READ_ME_FIRST.txt -Encoding UTF8 -Value @(
-            "TACTICS OGRE EXTERNAL COMPANION v3: stationary menu snapshot filtering",
+            "TACTICS OGRE EXTERNAL COMPANION v4: return-to-menu-position detector",
             "",
             "This uses your existing, working PPSSPP. DO NOT use any modified PPSSPP build.",
             "This is diagnostic memory observation, not a finished NVDA menu reader.",
@@ -48,7 +48,8 @@ jobs:
             "2. Start your usual PPSSPP with remote debugger enabled on localhost port 56244.",
             "3. Load Tactics Ogre One Vision and open a game menu.",
             "4. Double-click TacticsOgreCompanion.exe. You will hear/read the console status.",
-            "5. In PPSSPP, alternate UP/DOWN in the title menu. Try a few DOWN DOWN movements too.",
+            "5. In title menu, press DOWN UP DOWN UP, then DOWN DOWN UP UP.",
+            "Move slowly: wait until companion announces Recorded N before each next press.",
             "6. When finished, return to the companion console and press Q to stop recording.",
             "7. After it says finished, upload tactics-ogre-companion-trace.txt beside this EXE.",
             "",
@@ -57,7 +58,8 @@ jobs:
             "No OCR, Python installation, debugger commands, ISO changes, or game saves are needed.",
             "This app connects only to 127.0.0.1:56244; it cannot upload your data.",
             "You can keep playing your game if the companion fails.",
-            "Each action now takes TWO memory snapshots to remove moving animation noise.",
+            "Each action takes TWO memory snapshots to compare stationary states.",
+            "The trace now contains compact return-to-position results, not huge raw dumps.",
             "Important: Each capture reads four 2 MiB memory windows twice; stalls are possible.",
             "If no input broadcasts appear, the trace makes that visible for debugging."
           )
