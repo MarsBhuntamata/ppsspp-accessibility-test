@@ -18,7 +18,7 @@ import sys
 import time
 
 from to_target_watch import Connection, PORT, GAME_IDS, ADDRESS
-from to_speaking_title import Speaker, selection_announcement, read_labels, LABEL_FILE
+from to_speaking_title import Speaker, selection_announcement, read_labels, LABEL_FILE, DEFAULT_LABELS
 
 LOG_NAME = "tactics-ogre-menu-explorer.txt"
 
@@ -282,7 +282,7 @@ def main():
     print("Log:", path, flush=True)
     try:
         with path.open("w", encoding="utf-8", buffering=1) as log:
-            result = run(args.port, log, speaker, read_labels(folder() / LABEL_FILE))
+            result = run(args.port, log, speaker, read_labels(folder() / LABEL_FILE) or DEFAULT_LABELS)
     except OSError as exc:
         print("Cannot create explorer log:", exc, flush=True)
         result = 2
