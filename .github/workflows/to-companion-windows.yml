@@ -30,7 +30,7 @@ jobs:
       - name: Build single-file Windows program
         shell: pwsh
         run: |
-          python -m PyInstaller --clean --noconfirm --onefile --console --name TacticsOgreCompanion accessibility/companion/to_companion.py
+          python -m PyInstaller --clean --noconfirm --onefile --console --name TacticsOgreCompanion accessibility/companion/to_target_watch.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (!(Test-Path dist/TacticsOgreCompanion.exe)) { throw "Companion EXE missing" }
       - name: Package accessible instructions
@@ -39,17 +39,17 @@ jobs:
           New-Item -ItemType Directory -Force -Path package | Out-Null
           Copy-Item dist/TacticsOgreCompanion.exe package/
           Set-Content -Path package/READ_ME_FIRST.txt -Encoding UTF8 -Value @(
-            "TACTICS OGRE EXTERNAL COMPANION v5: untested PSP memory region detector",
+            "TACTICS OGRE EXTERNAL COMPANION v6: focused candidate verification",
             "",
             "This uses your existing, working PPSSPP. DO NOT use any modified PPSSPP build.",
             "This is diagnostic memory observation, not a finished NVDA menu reader.",
             "",
             "1. Leave the companion EXE in its own writable folder.",
             "2. Start your usual PPSSPP with remote debugger enabled on localhost port 56244.",
-            "3. Load Tactics Ogre One Vision and open a game menu.",
+            "3. Load Tactics Ogre One Vision and open the TITLE menu.",
             "4. Double-click TacticsOgreCompanion.exe. You will hear/read the console status.",
             "5. In title menu, press DOWN UP DOWN UP, then DOWN DOWN UP UP.",
-            "Move slowly: wait for the short capture beep after each movement.",
+            "Wait for a short beep after each movement; this watch should be much quicker.",
             "6. When finished, return to the companion console and press Q to stop recording.",
             "7. After it says finished, upload tactics-ogre-companion-trace.txt beside this EXE.",
             "",
@@ -58,9 +58,9 @@ jobs:
             "No OCR, Python installation, debugger commands, ISO changes, or game saves are needed.",
             "This app connects only to 127.0.0.1:56244; it cannot upload your data.",
             "You can keep playing your game if the companion fails.",
-            "Each action takes TWO memory snapshots to compare stationary states.",
-            "This version scans previously untested RAM gaps; prior candidate was a graphics buffer.",
-            "Important: Each capture reads two previously untested memory regions (8 MiB total) twice; stalls are possible.",
+            "One small 4 KiB snapshot is taken after each directional release.",
+            "Candidate 0x0964271C is unverified. Watch is read-only; no menu names yet.",
+            "No 8 MiB scans. Each memory read is only 4 KiB.",
             "If no input broadcasts appear, the trace makes that visible for debugging."
           )
       - name: Upload standalone companion
