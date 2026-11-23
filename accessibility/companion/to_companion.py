@@ -57,12 +57,13 @@ def output_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
-def analyze_triplet(a, b, c, *, base=BASE, limit=80):
+def analyze_triplet(a, b, c, *, base=BASE, limit_per_block=8):
     """Find low-valued bytes stable at A, B, A with return to original."""
     if len({len(x) for pair in (a, b, c) for x in pair}) != 1:
         raise ValueError("Snapshot sizes differ")
     count = 0
     rows = []
+    block_counts = {}
     for offset in range(len(a[0])):
         av, bv, cv = a[1][offset], b[1][offset], c[1][offset]
         if (av == bv or av != cv or av >= 16 or bv >= 16 or
@@ -70,8 +71,10 @@ def analyze_triplet(a, b, c, *, base=BASE, limit=80):
                 cv != c[0][offset]):
             continue
         count += 1
-        if len(rows) < limit:
+        block = offset // COMPARE_BLOCK
+        if block_counts.get(block, 0) < limit_per_block:
             rows.append((base + offset, av, bv))
+            block_counts[block] = block_counts.get(block, 0) + 1
     return count, rows
 
 
