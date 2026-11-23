@@ -36,6 +36,30 @@ class TestGameplayCursor(unittest.TestCase):
         self.assertEqual(module.confident_candidates({1: 1, 2: 2, 3: 4}),
                          [(4, 3), (2, 2)])
 
+    def test_no_speech_for_tarot_or_popup(self):
+        title = module.ADDRESS
+        secondary = 0x0964251C
+        self.assertEqual(module.opening_announcement(1, {title: (0, 2)}),
+                         (title, 2, "Option 3"))
+        self.assertEqual(module.opening_announcement(2, {secondary: (0, 1)}),
+                         (secondary, 1, "Option 2"))
+        for phase in (0, 3, 4, 7, 11, 20):
+            self.assertIsNone(module.opening_announcement(phase, {
+                title: (0, 2), secondary: (0, 1), 0x0914C2CA: (21, 22)
+            }))
+        self.assertIsNone(module.opening_announcement(1, {0x0914C2CA: (21, 22)}))
+
+    def test_animation_candidates_are_not_promoted(self):
+        score = {0x0914C2CA: 6, 0x0964859E: 3, 0x09648C88: 3}
+        samples = {
+            0x0914C2CA: {(21, 22), (22, 21)},
+            0x0964859E: {(1, 2), (2, 1)},
+            0x09648C88: {(0, 1), (1, 0)},
+        }
+        plausible, filtered = module.cursor_hypotheses(score, samples)
+        self.assertEqual(plausible, [(3, 0x0964859E)])
+        self.assertEqual({r[1] for r in filtered}, {0x0914C2CA, 0x09648C88})
+
     def test_seven_small_memory_reads(self):
         import base64
         class FakeConnection:
