@@ -36,6 +36,21 @@ class SpeakerTests(unittest.TestCase):
         self.assertFalse(speaker.record_and_announce(1, 4, voice))
         self.assertEqual(voice.sent, ["Title menu, option 2"])
 
+    def test_user_label_mapping(self):
+        self.assertEqual(speaker.selection_announcement(0, {0: "New Game"}), "New Game")
+        self.assertEqual(speaker.selection_announcement(1, {0: "New Game"}), "Title menu, option 2")
+
+    def test_direction_mismatch_is_flagged(self):
+        self.assertTrue(speaker.menu_transition(1, 2, "up"))
+        self.assertFalse(speaker.menu_transition(2, 1, "up"))
+
+    def test_custom_labels_file(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "labels.txt"
+            path.write_text("# comment\\n0=Start Adventure\\n1=Load Save\\n", encoding="utf-8")
+            self.assertEqual(speaker.read_labels(path), {0: "Start Adventure", 1: "Load Save"})
+
     def test_short_memory_response_fails(self):
         import base64
         with self.assertRaises(ValueError):
