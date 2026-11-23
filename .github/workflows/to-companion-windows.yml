@@ -49,7 +49,7 @@ jobs:
             "3. Load Tactics Ogre One Vision and open a game menu.",
             "4. Double-click TacticsOgreCompanion.exe. You will hear/read the console status.",
             "5. In title menu, press DOWN UP DOWN UP, then DOWN DOWN UP UP.",
-            "Move slowly: wait until companion announces Recorded N before each next press.",
+            "Move slowly: wait for the short capture beep after each movement.",
             "6. When finished, return to the companion console and press Q to stop recording.",
             "7. After it says finished, upload tactics-ogre-companion-trace.txt beside this EXE.",
             "",
