@@ -116,3 +116,21 @@ It arms **one temporary instruction breakpoint** and asks the tester to proceed 
 **Important change in tool behavior:** This is the first probe that temporarily pauses execution with a breakpoint. It does NOT write game RAM, but does modify PPSSPP's temporary debugger state and then cleans it up. Run only while starting **before** the name keyboard; if the name-entry initialization already occurred, the breakpoint may not trigger. The old title speech remains unmodified. The tool refuses to overwrite an existing breakpoint at the address or start if PPSSPP was already paused.
 
 Once the tester returns `tactics-ogre-name-object-hit.txt`, inspect whether `s0` is a valid user RAM pointer and whether `this+0x19C` / `this+0x1A0` become valid child pointers. If so, implement a focused live object watcher rather than another arbitrary byte scan.
+
+## Correction after v13 trace and inspection of preceding code (2026-11-24)
+
+**Important reclassification:** The `0x2A7830` array previously described as a `NameCharListWindow` "method table" is actually accessed by a MIPS **computed jump dispatcher**. Disassembly shows:
+- `0xDDBF4`: `addiu sp,sp,-0x50`, the beginning of the relevant dispatcher routine.
+- `0xDDBFC`: `move s0,a0`, retaining the input object pointer.
+- `0xDDC00`: `lw a0,0(a1)`, obtaining the dispatch value.
+- `0xDDC30`: `lui at,0x2A`
+- `0xDDC34`: `addu at,at,a0`
+- `0xDDC38`: `lw at,0x7830(at)`, reading the indexed jump destination from `.rodata`.
+- `0xDDC3C`: `jr at`, dispatching to the chosen case.
+- `0xDDC54`: one **case handler**, not the common function entry.
+
+This explains the lack of direct method-table pointers in the v12 RAM scan. The previous references to method-table entries should be treated as **jump-table case targets**, not vtable entries. The names and ELF load-base verification remain correct. v12 independently confirmed `0x08804000` load base and valid code bytes, not what the branch target *means*.
+
+The user-supplied **v13** log contains `ARMED 0x088E1C54`, then `WebSocketConnectionClosedException` with WinError 10053 while attempting breakpoint cleanup/resume. No `BREAK_HIT`, register values, or object data were captured. This does **not** prove PPSSPP itself crashed; it proves the debugger connection was lost. A remaining breakpoint or pause cannot be ruled out from that log. Do not ask for repeated v13 runs before determining whether PPSSPP stayed open, froze, or quit. If further instruction interception is warranted, instrument the entry at **`0x088E1BF4`** (ELF `0xDDBF4`) and capture **`a0` at entry**, since it is copied into `s0` at `0xDDBFC`. Do not treat that pointer as validated until memory bounds and behavior are checked.
+
+No new character speech or live object has been established.
