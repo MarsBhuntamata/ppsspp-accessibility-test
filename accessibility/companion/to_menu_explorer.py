@@ -18,7 +18,7 @@ import sys
 import time
 
 from to_target_watch import Connection, PORT, GAME_IDS, ADDRESS
-from to_speaking_title import Speaker
+from to_speaking_title import Speaker, selection_announcement, read_labels, LABEL_FILE
 
 LOG_NAME = "tactics-ogre-menu-explorer.txt"
 
@@ -150,10 +150,10 @@ def log_ranking(log, scores, veto, phase):
     log.flush()
 
 
-def run(port, log, speaker):
+def run(port, log, speaker, labels=None):
     import websocket
     conn = None
-    log.write("TACTICS OGRE MENU EXPLORER v9\n")
+    log.write("TACTICS OGRE SPEAKING MENU EXPLORER v9.1\n")
     log.write(f"START {datetime.now().isoformat(timespec='seconds')}\n")
     log.write("WINDOWS " + " ".join(f"0x{x:08X}" for x in WINDOWS) + "\n")
     log.flush()
@@ -165,9 +165,10 @@ def run(port, log, speaker):
             raise RuntimeError("Start Tactics Ogre in your regular PPSSPP.")
         log.write(f"GAME {game.get('id')} {game.get('title', '')}\n")
         current = read_windows(conn)
+        last_announced = None
         log.write("BASELINE captured\n")
         log.flush()
-        speaker.say("Tactics Ogre menu explorer connected.")
+        speaker.say("Tactics Ogre speaking menu explorer connected.")
         print("Explore the Load screen or another menu using your usual controls.", flush=True)
         print("Cross and Circle are logged as possible screen transitions.", flush=True)
         print("The companion does not know those menus' labels yet.", flush=True)
@@ -207,6 +208,9 @@ def run(port, log, speaker):
             next_state = read_windows(conn)
             seconds = time.monotonic() - start
             changes, examples = small_changes(current, next_state)
+            offset = ADDRESS - 0x09640000
+            old_index = current[0x09640000][offset]
+            new_index = next_state[0x09640000][offset]
             moves += 1
             log.write(f"EVENT {moves} {button} kind={action} phase={phase} "
                       f"read_seconds={seconds:.3f} low_changes={changes}\n")
@@ -222,7 +226,8 @@ def run(port, log, speaker):
                 log.write(f"TRANSITION candidate={button} phase={phase}\n")
                 print(f"Possible menu transition: {button}, phase {phase}.", flush=True)
                 # No assertion that the game actually opened a new menu.
-                speaker.say("Menu transition noted.")
+                speaker.say("Possible menu transition. Further menu labels unverified.")
+                last_announced = None
             elif action == "navigate":
                 history.append((next_state, button))
                 if len(history) == 3:
@@ -233,6 +238,16 @@ def run(port, log, speaker):
                               f"samples={samples}\n")
                 if moves % 4 == 0:
                     log_ranking(log, scores, veto, phase)
+                delta = new_index - old_index
+                expected = 1 if button == "down" else -1 if button == "up" else 0
+                if expected and delta == expected and 0 <= new_index <= 15:
+                    # Only the title phase gets the known (provisional) names.
+                    words = (selection_announcement(new_index, labels) if phase == 0
+                             else f"Possible menu option {new_index + 1}, unverified")
+                    if words and last_announced != (phase, new_index):
+                        speaker.say(words)
+                        log.write(f"SPOKEN phase={phase} index={new_index} text={words}\n")
+                        last_announced = (phase, new_index)
                 print(f"Recorded {moves}: {button} in phase {phase}.", flush=True)
             current = next_state
             log.flush()
@@ -263,11 +278,11 @@ def main():
     args = parser.parse_args()
     path = folder() / LOG_NAME
     speaker = Speaker()
-    print("Tactics Ogre menu explorer v9. Speaker:", speaker.mode, flush=True)
+    print("Tactics Ogre speaking menu explorer v9.1. Speaker:", speaker.mode, flush=True)
     print("Log:", path, flush=True)
     try:
         with path.open("w", encoding="utf-8", buffering=1) as log:
-            result = run(args.port, log, speaker)
+            result = run(args.port, log, speaker, read_labels(folder() / LABEL_FILE))
     except OSError as exc:
         print("Cannot create explorer log:", exc, flush=True)
         result = 2
