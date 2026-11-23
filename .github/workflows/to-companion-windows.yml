@@ -36,14 +36,28 @@ jobs:
           python -m PyInstaller --clean --noconfirm --onefile --console --name TacticsOgreRuntimeMapper accessibility/companion/to_runtime_mapper.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (!(Test-Path dist/TacticsOgreRuntimeMapper.exe)) { throw "Runtime mapper EXE missing" }
+          python -m PyInstaller --clean --noconfirm --onefile --console --name TacticsOgreNameObjectTrace accessibility/companion/to_name_object_hit.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (!(Test-Path dist/TacticsOgreNameObjectTrace.exe)) { throw "Name object tracer EXE missing" }
       - name: Package accessible instructions
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path package | Out-Null
           Copy-Item dist/TacticsOgreCompanion.exe package/
           Copy-Item dist/TacticsOgreRuntimeMapper.exe package/
+          Copy-Item dist/TacticsOgreNameObjectTrace.exe package/
           Set-Content -Path package/READ_ME_FIRST.txt -Encoding UTF8 -Value @(
-            "TACTICS OGRE TAROT RESEARCH v11 + RUNTIME MAPPER v12",
+            "TACTICS OGRE TAROT RESEARCH v11 + NAME OBJECT TRACE v13",
+            "",
+            "NEW NAME OBJECT TRACE (single temporary breakpoint):",
+            "1. Launch Tactics Ogre in PPSSPP and stay on the title/opening menus.",
+            "2. Start TacticsOgreNameObjectTrace.exe BEFORE entering the name keyboard.",
+            "3. Once you hear that the trap is armed, enter the name keyboard.",
+            "4. The game briefly pauses at the verified name code, then auto-resumes.",
+            "5. Upload tactics-ogre-name-object-hit.txt from the same folder.",
+            "6. The temporary breakpoint is removed, including on cancellation.",
+            "7. If PPSSPP is already paused by another debugger, this tool refuses to start.",
+            "8. If the trap fails, please report whether the game stayed paused.",
             "",
             "NEW RUNTIME MAPPER (research-only, no guessed speech):",
             "1. Launch Tactics Ogre in stock PPSSPP; enter the name keyboard.",
