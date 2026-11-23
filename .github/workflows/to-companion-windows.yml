@@ -32,14 +32,28 @@ jobs:
         run: |
           python -m PyInstaller --clean --noconfirm --onefile --console --name TacticsOgreCompanion accessibility/companion/to_gameplay_cursor.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (!(Test-Path dist/TacticsOgreCompanion.exe)) { throw "Companion EXE missing" }\n          python -m PyInstaller --clean --noconfirm --onefile --console --name TacticsOgreRuntimeMapper accessibility/companion/to_runtime_mapper.py\n          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n          if (!(Test-Path dist/TacticsOgreRuntimeMapper.exe)) { throw "Runtime mapper EXE missing" }
+          if (!(Test-Path dist/TacticsOgreCompanion.exe)) { throw "Companion EXE missing" }
+          python -m PyInstaller --clean --noconfirm --onefile --console --name TacticsOgreRuntimeMapper accessibility/companion/to_runtime_mapper.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (!(Test-Path dist/TacticsOgreRuntimeMapper.exe)) { throw "Runtime mapper EXE missing" }
       - name: Package accessible instructions
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path package | Out-Null
-          Copy-Item dist/TacticsOgreCompanion.exe package/\n          Copy-Item dist/TacticsOgreRuntimeMapper.exe package/
+          Copy-Item dist/TacticsOgreCompanion.exe package/
+          Copy-Item dist/TacticsOgreRuntimeMapper.exe package/
           Set-Content -Path package/READ_ME_FIRST.txt -Encoding UTF8 -Value @(
-            "TACTICS OGRE TAROT RESEARCH v11 + RUNTIME MAPPER v12",\n            "",\n            "NEW RUNTIME MAPPER (research-only, no guessed speech):",\n            "1. Launch Tactics Ogre in stock PPSSPP; enter the name keyboard.",\n            "2. While the keyboard is open, start TacticsOgreRuntimeMapper.exe.",\n            "3. Leave the keyboard open during the read-only scan.",\n            "4. Upload tactics-ogre-runtime-objects.txt from this folder.",\n            "5. No OCR, debugger menus, memory edits or extra game files required.",\n            "6. If the scan does not verify a module base, send the log anyway.",\n            "",\n            "OLD v11 EXPLORER (unchanged):",
+            "TACTICS OGRE TAROT RESEARCH v11 + RUNTIME MAPPER v12",
+            "",
+            "NEW RUNTIME MAPPER (research-only, no guessed speech):",
+            "1. Launch Tactics Ogre in stock PPSSPP; enter the name keyboard.",
+            "2. While the keyboard is open, start TacticsOgreRuntimeMapper.exe.",
+            "3. Leave the keyboard open during the read-only scan.",
+            "4. Upload tactics-ogre-runtime-objects.txt from this folder.",
+            "5. No OCR, debugger menus, memory edits or extra game files required.",
+            "6. If the scan does not verify a module base, send the log anyway.",
+            "",
+            "OLD v11 EXPLORER (unchanged):",
             "",
             "Use your normal stock PPSSPP with remote debugger 127.0.0.1:56244.",
             "This investigates character creation and gameplay without inventing menu choices.",
