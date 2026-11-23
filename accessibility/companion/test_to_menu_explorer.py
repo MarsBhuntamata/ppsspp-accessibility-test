@@ -26,9 +26,14 @@ class ExplorerTests(unittest.TestCase):
         a = {base: bytes([0, 0, 9])}
         b = {base: bytes([1, 0, 9])}
         c = {base: bytes([0, 0, 9])}
-        count, matches = explorer.return_candidates(a, b, c)
-        self.assertEqual(count, 1)
-        self.assertEqual(matches, [(base, 0, 1)])
+        prior = explorer.WINDOWS
+        explorer.WINDOWS = (base,)
+        try:
+            count, matches = explorer.return_candidates(a, b, c)
+            self.assertEqual(count, 1)
+            self.assertEqual(matches, [(base, 0, 1)])
+        finally:
+            explorer.WINDOWS = prior
 
     def test_inverse_moves_get_credit(self):
         base = explorer.WINDOWS[0]
