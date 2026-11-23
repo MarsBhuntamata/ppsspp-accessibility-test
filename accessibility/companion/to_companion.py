@@ -43,7 +43,8 @@ def signal(kind: str):
         import winsound
         notes = {"ready": [(660, 130), (880, 150)],
                  "complete": [(880, 140), (1100, 190)],
-                 "error": [(330, 240), (220, 310)]}.get(kind, [])
+                 "error": [(330, 240), (220, 310)],
+                 "capture": [(784, 75)]}.get(kind, [])
         for hz, ms in notes:
             winsound.Beep(hz, ms)
     except Exception:
@@ -287,6 +288,7 @@ def run(port: int, log, max_captures=MAX_CAPTURES):
                     log.write(f"RANK {addr:08X} score={rank} returns={returns} alternation={penalty} values={pairs}\n")
             log.flush()
             print(f"Recorded {captures}: {direction}. Return patterns: {len(scores)}.", flush=True)
+            signal("capture")
             last_report = time.monotonic()
         leaders = summarize_candidates(scores, veto)
         log.write(f"FINAL_CANDIDATES {len(leaders)}\n")
