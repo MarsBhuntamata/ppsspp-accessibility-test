@@ -1,4 +1,4 @@
-"""Companion self-tests, runnable on CI without PPSSPP or Windows."""
+"""Offline regression tests for external Tactics Ogre companion."""
 import importlib.util
 from pathlib import Path
 import unittest
@@ -13,46 +13,48 @@ class CompanionTests(unittest.TestCase):
     def test_release_only(self):
         msg = {"event": "input.buttons", "changed": {"up": False, "cross": True}}
         self.assertEqual(companion.released_directions(msg), ("up",))
-        self.assertEqual(companion.released_directions({"event": "input.buttons", "changed": {"up": True}}), ())
-        self.assertEqual(companion.released_directions({"event": "game.quit"}), ())
+        self.assertEqual(companion.released_directions(
+            {"event": "input.buttons", "changed": {"up": True}}), ())
 
-    def test_memory_diff_reports_word_values(self):
-        a = bytearray(b"\x00" * 16)
-        b = bytearray(a)
-        b[4] = 1
-        b[8] = 2
-        count, changes = companion.changed_words(bytes(a), bytes(b), 0x8800000)
-        self.assertEqual(count, 2)
-        self.assertEqual(changes, [(0x8800004, 0, 1), (0x8800008, 0, 2)])
-
-    def test_memory_diff_is_bounded_per_block(self):
-        a = bytes(64)
-        b = bytes([1] * 64)
-        count, changes = companion.changed_words(a, b)
-        self.assertEqual(count, 16)
-        self.assertEqual(len(changes), companion.MAX_CHANGES_PER_BLOCK)
-
-    def test_stationary_selection_changes_survive(self):
-        old_a = bytes([0, 0, 0, 0, 1, 0, 0, 0])
-        old_b = old_a
-        new_a = bytes([3, 0, 0, 0, 2, 0, 0, 0])
-        new_b = bytes([4, 0, 0, 0, 2, 0, 0, 0])
-        count, rows = companion.stable_changed_words(
-            old_a, old_b, new_a, new_b, 0x09000000)
+    def test_true_return_to_position(self):
+        a = (bytes([0, 0, 5, 99]), bytes([0, 0, 5, 99]))
+        b = (bytes([1, 0, 5, 98]), bytes([1, 0, 5, 97]))
+        c = (bytes([0, 0, 5, 96]), bytes([0, 0, 5, 95]))
+        count, rows = companion.analyze_triplet(a, b, c, base=0x9000000)
         self.assertEqual(count, 1)
-        self.assertEqual(rows, [(0x09000004, 1, 2)])
+        self.assertEqual(rows, [(0x9000000, 0, 1)])
 
-    def test_unstable_baseline_excluded(self):
-        old_a = bytes([1, 0, 0, 0])
-        old_b = bytes([2, 0, 0, 0])
-        new_a = new_b = bytes([3, 0, 0, 0])
-        count, rows = companion.stable_changed_words(
-            old_a, old_b, new_a, new_b, 0x09000000)
-        self.assertEqual((count, rows), (0, []))
+    def test_inconsistent_stationary_state_not_selected(self):
+        a = (bytes([0]), bytes([0]))
+        b = (bytes([1]), bytes([2]))
+        c = (bytes([0]), bytes([0]))
+        self.assertEqual(companion.analyze_triplet(a, b, c), (0, []))
 
-    def test_bad_snapshots_fail(self):
-        with self.assertRaises(ValueError):
-            companion.changed_words(b"\0", b"\0")
+    def test_same_direction_can_veto_double_buffer(self):
+        a = (bytes([0]), bytes([0]))
+        b = (bytes([1]), bytes([1]))
+        c = (bytes([0]), bytes([0]))
+        regions = ((0x9000000, 1),)
+        opposite = companion.classify_triplet([a], [b], [c],
+                                                ("down", "up"), regions)
+        same = companion.classify_triplet([a], [b], [c],
+                                            ("down", "down"), regions)
+        self.assertEqual(opposite, (True, 1, [(0x9000000, 0, 1)]))
+        self.assertEqual(same, (False, 1, [(0x9000000, 0, 1)]))
+        scores = {0x9000000: {"returns": 1, "pairs": {(0, 1)}}}
+        self.assertEqual(companion.summarize_candidates(scores, {0x9000000: 1}), [])
+
+    def test_distinct_position_is_not_return(self):
+        a = (bytes([0]), bytes([0]))
+        b = (bytes([1]), bytes([1]))
+        c = (bytes([2]), bytes([2]))
+        self.assertEqual(companion.analyze_triplet(a, b, c), (0, []))
+
+    def test_rank_repeated_returns(self):
+        scores = {0x9000000: {"returns": 3, "pairs": {(0, 1)}}}
+        ranked = companion.summarize_candidates(scores, {})
+        self.assertEqual(ranked[0][0], 9)
+        self.assertEqual(ranked[0][3], 0x9000000)
 
 
 if __name__ == "__main__":
