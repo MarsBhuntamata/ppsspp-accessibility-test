@@ -96,7 +96,19 @@ class Connection:
         self.pending = deque()
 
     def recv(self):
-        return json.loads(self.ws.recv())
+        """Treat closed sockets as disconnections, not mysterious JSON errors."""
+        import websocket
+        raw = self.ws.recv()
+        if raw is None or raw == "" or raw == b"":
+            raise websocket.WebSocketConnectionClosedException(
+                "PPSSPP debugger closed the WebSocket connection")
+        try:
+            value = json.loads(raw)
+        except (ValueError, TypeError) as exc:
+            raise RuntimeError("Unexpected non-JSON response from PPSSPP debugger") from exc
+        if not isinstance(value, dict):
+            raise RuntimeError("Unexpected debugger response type")
+        return value
 
     def request(self, event, **kwargs):
         import websocket
