@@ -29,7 +29,7 @@ VTABLE_ELF = 0x002A7830
 METHOD_ELF = 0x000DDC54
 # The first MIPS words at NameCharListWindow's first table target.
 # LUI $a0,5 ; ADDIU $a0,$a0,-0x7588 ; JAL 0x1f572c (MIPS little-endian).
-METHOD_PREFIX = bytes.fromhex("0500043c788a8424cbd5070c")
+METHOD_PREFIX = bytes.fromhex("0500043c788a8424cbd5070c")\n# Relocation changes immediate fields. Validate only opcode/register pattern.\nMETHOD_MASKS = (0xFFFF0000, 0xFFFF0000, 0xFC000000)
 
 
 def folder():
@@ -72,7 +72,7 @@ def find_aligned_words(address, buffer, targets):
     return values
 
 
-def scan_for_base(conn, log):
+def matches_relocated_method(code):\n    if len(code) != len(METHOD_PREFIX):\n        return False\n    for off, mask in zip(range(0, len(code), 4), METHOD_MASKS):\n        actual = struct.unpack_from("<I", code, off)[0]\n        original = struct.unpack_from("<I", METHOD_PREFIX, off)[0]\n        if (actual & mask) != (original & mask):\n            return False\n    return True\n\n\ndef scan_for_base(conn, log):
     # Game PRX usually loads in early user RAM. Continue wider if necessary.
     for start, end in ((RAM_START, 0x09000000), (0x09000000, RAM_END)):
         log.write(f"SEARCH_NAMES range=0x{start:08X}-0x{end:08X}\n")
