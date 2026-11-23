@@ -160,7 +160,7 @@ def quit_pressed():
 def run(port, speaker, log, labels=None):
     import websocket
     conn = None
-    log.write("TACTICS OGRE TITLE MENU SPEAKER v8\n")
+    log.write("TACTICS OGRE TITLE MENU SPEAKER v8.1\n")
     log.write(f"WATCH 0x{ADDRESS:08X}\n")
     log.write(f"LABELS {labels or {}}\n")
     try:
@@ -180,6 +180,7 @@ def run(port, speaker, log, labels=None):
         # Initial title display can contain 4; do not call it a menu entry.
         last_value = initial
         recent_activity = time.monotonic()
+        reconnects = 0
         while True:
             if quit_pressed():
                 log.write("FINISHED user requested stop\n")
@@ -189,6 +190,36 @@ def run(port, speaker, log, labels=None):
             else:
                 try:
                     message = conn.recv()
+                except (websocket.WebSocketConnectionClosedException,
+                        ConnectionResetError, BrokenPipeError, OSError,
+                        RuntimeError) as exc:
+                    log.write(f"DEBUGGER_DISCONNECTED {type(exc).__name__}: {exc}\n")
+                    log.flush()
+                    if reconnects >= 3:
+                        log.write("ERROR PPSSPP debugger connection lost after retries\n")
+                        break
+                    reconnects += 1
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+                    time.sleep(0.5)
+                    try:
+                        conn = Connection(port)
+                        reconnect_status = conn.request("game.status")
+                        reconnect_id = (reconnect_status.get("game") or {}).get("id", "")
+                        if reconnect_id not in GAME_IDS:
+                            raise RuntimeError("Tactics Ogre no longer loaded")
+                        last_value = parse_value(
+                            conn.request("memory.read", address=WINDOW, size=SIZE))
+                        log.write(f"RECONNECTED {reconnects} selection={last_value}\n")
+                        log.flush()
+                        recent_activity = time.monotonic()
+                        continue
+                    except Exception as reconnect_exc:
+                        log.write(f"RECONNECT_FAILED {type(reconnect_exc).__name__}: {reconnect_exc}\n")
+                        log.flush()
+                        break
                 except websocket.WebSocketTimeoutException:
                     if time.monotonic() - recent_activity >= 15:
                         log.write("HEARTBEAT waiting for game navigation\n")
@@ -203,7 +234,31 @@ def run(port, speaker, log, labels=None):
                 continue
             time.sleep(0.10)
             started = time.monotonic()
-            value = parse_value(conn.request("memory.read", address=WINDOW, size=SIZE))
+            try:
+                value = parse_value(conn.request("memory.read", address=WINDOW, size=SIZE))
+            except (websocket.WebSocketConnectionClosedException,
+                    ConnectionResetError, BrokenPipeError, OSError,
+                    RuntimeError) as exc:
+                log.write(f"MEMORY_READ_CONNECTION_LOST {type(exc).__name__}: {exc}\n")
+                log.flush()
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                try:
+                    conn = Connection(port)
+                    reconnect_status = conn.request("game.status")
+                    if (reconnect_status.get("game") or {}).get("id", "") not in GAME_IDS:
+                        raise RuntimeError("Tactics Ogre no longer loaded")
+                    last_value = parse_value(
+                        conn.request("memory.read", address=WINDOW, size=SIZE))
+                    log.write(f"RECONNECTED after memory read selection={last_value}\n")
+                    log.flush()
+                    continue
+                except Exception as reconnect_exc:
+                    log.write(f"RECONNECT_FAILED {type(reconnect_exc).__name__}: {reconnect_exc}\n")
+                    log.flush()
+                    break
             elapsed = time.monotonic() - started
             suspicious = menu_transition(last_value, value, directions[0])
             # Log suspicious transitions; do not assert that the resulting
@@ -236,7 +291,7 @@ def main():
     parser.add_argument("--port", type=int, default=56244)
     args = parser.parse_args()
     speaker = Speaker()
-    print("Tactics Ogre speaking companion v8", flush=True)
+    print("Tactics Ogre speaking companion v8.1", flush=True)
     print("Speech method:", speaker.mode, flush=True)
     label_path = folder() / LABEL_FILE
     labels = read_labels(label_path)
