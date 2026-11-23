@@ -103,10 +103,62 @@ def report_candidates(log, scores, phase, limit=12):
         log.write(f"CURSOR? 0x{address:08X} returns={score}\n")
 
 
+# The only reliable cursors are from the opening menus. Phase numbers are
+# NOT screen identifiers, and later screens never get guessed speech.
+OPENING_CURSORS = {1: ADDRESS, 2: 0x0964251C}
+DIAGNOSTIC_ADDRESSES = (
+    0x0964214C, 0x0964859E, 0x09648C88,
+    0x0914CB90, 0x0914CBA4, 0x0914CBB8,
+)
+
+
+def opening_announcement(phase, changes):
+    """Never announce unknown popup, tarot or gameplay memory as an option."""
+    address = OPENING_CURSORS.get(phase)
+    if address is None or address not in changes:
+        return None
+    previous, current = changes[address]
+    if not 0 <= current <= 3:
+        return None
+    # A movement by several slots is valid when key repeat is fast.
+    return (address, current, f"Option {current + 1}")
+
+
+def animation_like(address, before, after):
+    """Exclude the recurrent 21/22 pattern seen throughout the v10 trace."""
+    return (before, after) in ((21, 22), (22, 21))
+
+
+def cursor_hypotheses(scores, page_samples):
+    """Separate repetitive mirrored graphics data from candidates in the log."""
+    candidates = confident_candidates(scores, min_returns=2, max_results=48)
+    reliable = []
+    rejected = []
+    for score, addr in candidates:
+        transitions = page_samples.get(addr, set())
+        if transitions and all(animation_like(addr, a, b) for a, b in transitions):
+            rejected.append((score, addr, "repeated_21_22_pattern"))
+        elif transitions and all(a in (0, 1) and b in (0, 1) for a, b in transitions):
+            rejected.append((score, addr, "binary_toggle_not_index"))
+        else:
+            reliable.append((score, addr))
+    return reliable, rejected
+
+
+def report_stage(log, phase, scores, samples, limit=12):
+    probable, rejected = cursor_hypotheses(scores, samples)
+    log.write(f"STAGE phase={phase} reviewed={len(scores)} "
+              f"candidates={len(probable)} filtered={len(rejected)}\n")
+    for score, addr in probable[:limit]:
+        log.write(f"HYPOTHESIS 0x{addr:08X} returns={score} transitions={sorted(samples.get(addr, ()))[:8]}\n")
+    for score, addr, reason in rejected[:6]:
+        log.write(f"FILTERED 0x{addr:08X} returns={score} reason={reason}\n")
+
+
 def run(port, log, speaker, labels):
     import websocket
     conn = None
-    log.write("TACTICS OGRE GAMEPLAY CURSOR DISCOVERY v10\n")
+    log.write("TACTICS OGRE TAROT RESEARCH v11\n")
     log.write(f"START {datetime.now().isoformat(timespec='seconds')}\n")
     log.write("PAGES " + " ".join(f"0x{a:08X}" for a in WATCH_PAGES) + "\n")
     log.write("UNVERIFIED other-menu addresses and labels; cursor rankings are hypotheses.\n")
@@ -120,13 +172,14 @@ def run(port, log, speaker, labels):
         history = deque(maxlen=3)
         history.append((state, None))
         scores = defaultdict(int)
+        samples = defaultdict(set)
         phase = 0
         count = 0
         announced = None
         last_record = time.monotonic()
-        speaker.say("Ogre gameplay cursor discovery connected.")
+        speaker.say("Ogre tarot research connected.")
         print("Navigate through character creation, then gameplay menus.", flush=True)
-        print("Revisit options with Down and Up, or Right and Left.", flush=True)
+        print("Tarot and gameplay are research-only; no guessed option numbers.", flush=True)
         print("Press Q in this window when finished; upload the gameplay cursor log.", flush=True)
         while True:
             if stop_requested():
@@ -160,10 +213,16 @@ def run(port, log, speaker, labels):
             for base in WATCH_PAGES:
                 for addr, a, b in examples[base]:
                     log.write(f"DIFF 0x{addr:08X} {a}->{b}\n")
+            log.write("STATE " + " ".join(
+                f"0x{addr:08X}={value_at(next_state, addr)}" for addr in DIAGNOSTIC_ADDRESSES) + "\n")
+            if action == "navigate":
+                for addr, pair in changes.items():
+                    samples[addr].add(pair)
             if action == "transition":
-                report_candidates(log, scores, phase)
+                report_stage(log, phase, scores, samples)
                 phase += 1
                 scores.clear()
+                samples.clear()
                 history.clear()
                 history.append((next_state, None))
                 announced = None
@@ -178,34 +237,26 @@ def run(port, log, speaker, labels):
                     log.write(f"INVERSE_RETURNS {len(returns)} "
                               f"best={[(hex(addr), scores[addr]) for addr, _, _ in returns[:8]]}\n")
                 if count % 6 == 0:
-                    report_candidates(log, scores, phase)
-                # Preserve the known opening-menu readout. For new screens,
-                # only numeric speech after a candidate passes two returns.
-                candidates = confident_candidates(scores)
-                preferred = None
-                for addr in (ADDRESS, 0x0964251C):
-                    if addr in changes and value_at(next_state, addr) <= 3:
-                        preferred = addr
-                        break
-                if preferred is None and candidates:
-                    preferred = candidates[0][1]
-                if preferred is not None and preferred in changes:
-                    value = value_at(next_state, preferred)
-                    if value <= MAX_CANDIDATE:
-                        words = f"Option {value + 1}"
-                        signature = (phase, preferred, value)
-                        if signature != announced:
-                            speaker.say(words)
-                            announced = signature
-                            log.write(f"SPOKEN {words} candidate=0x{preferred:08X}\n")
-                elif changes:
-                    log.write("DISCOVERING unknown menu selection\n")
+                    report_stage(log, phase, scores, samples)
+                # Only the two known opening cursors speak. Tarot and gameplay
+                # candidates remain silent research data until independently
+                # validated. No more popup = "Option 2" false positives.
+                spoken = opening_announcement(phase, changes)
+                if spoken is not None:
+                    addr, value, words = spoken
+                    signature = (phase, addr, value)
+                    if signature != announced:
+                        speaker.say(words)
+                        announced = signature
+                        log.write(f"SPOKEN {words} verified_opening_cursor=0x{addr:08X}\n")
+                else:
+                    log.write("SILENT_UNKNOWN_SCREEN no cursor verified\n")
             state = next_state
             last_record = time.monotonic()
             log.flush()
-        report_candidates(log, scores, phase)
+        report_stage(log, phase, scores, samples)
         log.write(f"EVENTS {count} PHASES {phase + 1}\n")
-        speaker.say("Gameplay cursor discovery saved.")
+        speaker.say("Tarot research log saved.")
         return 0
     except KeyboardInterrupt:
         log.write("FINISHED keyboard interrupt\n")
@@ -227,7 +278,7 @@ def main():
     args = parser.parse_args()
     path = folder() / LOG_NAME
     speaker = Speaker()
-    print("Tactics Ogre gameplay cursor discovery v10.", flush=True)
+    print("Tactics Ogre tarot research v11.", flush=True)
     print("Log:", path, flush=True)
     try:
         with path.open("w", encoding="utf-8", buffering=1) as log:
