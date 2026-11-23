@@ -48,7 +48,7 @@ class SpeakerTests(unittest.TestCase):
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "labels.txt"
-            path.write_text("# comment\\n0=Start Adventure\\n1=Load Save\\n", encoding="utf-8")
+            path.write_text("# comment\n0=Start Adventure\n1=Load Save\n", encoding="utf-8")
             self.assertEqual(speaker.read_labels(path), {0: "Start Adventure", 1: "Load Save"})
 
     def test_short_memory_response_fails(self):
